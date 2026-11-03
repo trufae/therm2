@@ -1,5 +1,9 @@
 # Therm2
 
+[![CI](https://github.com/trufae/therm2/actions/workflows/ci.yml/badge.svg)](https://github.com/trufae/therm2/actions/workflows/ci.yml)
+
+<img src="docs/AppIcon.png" width="128" alt="Therm2 app icon">
+
 A small native macOS terminal built with AppKit and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
 Therm's essentials, starting from an empty codebase: tabs, nested splits, instant fullscreen,
 an opaque dark background, and little else. The icon is a dark terminal with a simple
