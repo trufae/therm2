@@ -18,12 +18,36 @@ Requires macOS 13 or newer and Swift 6.2 or newer (Xcode 26+).
 make          # optimized, ad-hoc signed build/Therm2.app
 make run
 make test
+make dmg      # universal release app + DMG and SHA-256 checksum in build/
 ```
 
 Use `make debug` for a debug app bundle, then attach Xcode or LLDB to the running app.
 The first build downloads dependencies. `Package.resolved` pins the complete resolution.
 To install, copy `build/Therm2.app` to `/Applications`. Distribution builds need your own
 Developer ID signature and notarization.
+
+## Downloads and releases
+
+[GitHub Releases](https://github.com/trufae/therm2/releases) provides versioned DMGs.
+The [continuous prerelease](https://github.com/trufae/therm2/releases/tag/continuous)
+tracks the latest successful build of `main`. Open the DMG and drag Therm2 to
+Applications. These builds support Intel and Apple Silicon on macOS 13 or newer;
+they are ad-hoc signed and are not notarized by Apple.
+
+```sh
+./version.sh         # print the app version from Resources/Info.plist
+./version.sh 0.2.0   # set X.Y.Z and increment CFBundleVersion
+make dmg            # build/Therm2-0.2.0-universal.dmg and .dmg.sha256
+```
+
+Setting the current version again leaves the build number unchanged. Commit the
+version change, then push a matching tag (for example, `v0.2.0`) to publish a
+versioned GitHub Release. CI rejects tags that disagree with `./version.sh`.
+Every branch push, pull request, and manual CI run tests the app and runs
+`make dmg`, keeping the DMG and checksum as downloadable Actions artifacts for
+30 days. Successful `main` builds also update the continuous prerelease; version
+tags publish the same tested artifacts as a release. Publishing uses the built-in
+`GITHUB_TOKEN`; no additional release secret is needed.
 
 ## Icon artwork
 
@@ -133,7 +157,7 @@ A compact preview shows the default font size, background, separator, and inacti
 An empty window title does not hide the ANSI-set names in the tab bar.
 
 The app bundles the same five font files as Therm: Agave, ProggySquareTT, PxPlus IBM MDA,
-DS-Digital, and PowerlineSymbols. They are registered only for this process; nothing is
+DS-Digital, and PowerlineSymbols, plus IBM Plex Mono (Regular and Bold). They are registered only for this process; nothing is
 installed in the user's or system's font directories. The original embedded notices are
 preserved and collected in `Resources/Fonts/NOTICES.txt`. System font families remain
 available as well. Restore Defaults returns to the original colors and System Monospace.

@@ -24,3 +24,10 @@ agave
 Copyright 2013 type agaric
 MIT X
 http://an.erki.net/~b/type/agave_license
+
+IBMPlexMono-Regular.ttf
+IBMPlexMono-Bold.ttf
+IBM Plex Mono
+Copyright 2017 IBM Corp.
+SIL Open Font License 1.1
+https://github.com/IBM/plex

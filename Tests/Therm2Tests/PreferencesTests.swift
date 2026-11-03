@@ -115,8 +115,9 @@ struct PreferencesTests {
     @Test func originalThermFontsRegisterInsideTheProcess() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         BundledFonts.register(directory: root.appendingPathComponent("Resources/Fonts"))
-        #expect(BundledFonts.families.count == 5)
+        #expect(BundledFonts.families.count == 6)
         #expect(BundledFonts.families.contains { $0.lowercased().contains("agave") })
+        #expect(BundledFonts.families.contains { $0.lowercased().contains("plex mono") })
         for family in BundledFonts.families {
             #expect(NSFontManager.shared.font(withFamily: family, traits: [], weight: 5, size: 13) != nil)
         }
