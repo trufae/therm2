@@ -1,6 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <g fill="none" stroke="#eeeeee" stroke-width="32" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M438 304c-22-29-95-44-133-14-41 33-29 82 23 100l55 18c64 21 75 76 34 111-39 33-113 22-143-14"/>
-    <path d="M350 242v332"/>
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>prompt.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <g>
+      <path d="M331.074 197.074 C309.074 168.074 236.074 153.074 198.074 183.074 C157.074 216.074 169.074 265.074 221.074 283.074 L276.074 301.074 C340.074 322.074 351.074 377.074 310.074 412.074 C271.074 445.074 197.074 434.074 167.074 398.074" fill="none" stroke="#eeeeee" stroke-width="32" stroke-linejoin="round"/>
+      <path d="M251.074 135.074 L251.074 467.074" fill="none" stroke="#eeeeee" stroke-width="32" stroke-linejoin="round"/>
+    </g>
   </g>
 </svg>

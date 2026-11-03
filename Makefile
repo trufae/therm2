@@ -1,6 +1,6 @@
 APP     = build/Therm2.app
 DESTDIR = $(HOME)/Applications
-.PHONY: all debug run prepare test install uninstall sign clean
+.PHONY: all debug run prepare test icons install uninstall sign clean
 
 all:
 	./scripts/build.sh release
@@ -16,6 +16,9 @@ prepare:
 
 test:
 	./scripts/test.sh
+
+icons:
+	./scripts/generate-icons.sh
 
 sign: all
 	codesign --force --sign - $(APP)

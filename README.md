@@ -21,6 +21,29 @@ The first build downloads dependencies. `Package.resolved` pins the complete res
 To install, copy `build/Therm2.app` to `/Applications`. Distribution builds need your own
 Developer ID signature and notarization.
 
+## Icon artwork
+
+The vector source is [`Resources/AppIcon.icon/Assets/prompt.svg`](Resources/AppIcon.icon/Assets/prompt.svg).
+The Icon Composer document's `icon.json` supplies the background and styling. Edit the
+SVG to change the prompt artwork; the normal app build uses the same icon exports.
+
+```sh
+make icons
+# Or use another SVG and output directory:
+./scripts/generate-icons.sh path/to/prompt.svg build/custom-icons
+```
+
+The script requires macOS and Xcode. It creates the Icon Composer document, a full-size
+`AppIcon.icns`, `Assets.car`, an `.iconset`, and all ten macOS PNG entries (16–1024 pixels,
+including Retina sizes) in `Assets.xcassets/AppIcon.appiconset`. Output defaults to
+`build/icons`; the source artwork is left untouched. The exported PNGs include the
+background and system-rendered icon shape, matching the compiled icon.
+
+`make` and `make run` reuse these exports when the icon sources are unchanged and
+regenerate them automatically after an SVG or styling edit. Each build replaces only
+the app bundle so macOS notices the updated icon, while keeping SwiftPM's compiled
+files. `make clean` is unnecessary for icon changes.
+
 ## Keys
 
 | Shortcut | Action |
