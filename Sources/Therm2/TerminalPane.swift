@@ -14,6 +14,12 @@ final class TerminalPane: LocalProcessTerminalView {
     private var pinchFontSize: CGFloat?
     private var maximizedMarker: MaximizedPaneMarker?
 
+    var newSessionDirectory: String {
+        guard Preferences.shared.directoryMode == .inherit else { return NSHomeDirectory() }
+        if process.running, let path = WorkingDirectory.path(of: process.shellPid) { return path }
+        return WorkingDirectory.valid(directory) ? directory : NSHomeDirectory()
+    }
+
     init(directory: String) {
         self.directory = directory
         var options = TerminalOptions.default
@@ -23,8 +29,8 @@ final class TerminalPane: LocalProcessTerminalView {
         options.kittyGraphics.storageLimitBytesPerScreen = 0
         options.enableSixelReported = false
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 500),
-                   font: .monospacedSystemFont(ofSize: Self.defaultFontSize, weight: .regular), options: options)
-        nativeBackgroundColor = Self.background
+                   font: Preferences.shared.font(size: Self.defaultFontSize), options: options)
+        nativeBackgroundColor = Preferences.shared.backgroundColor
         nativeForegroundColor = NSColor(white: 0.86, alpha: 1)
         caretColor = NSColor(white: 0.86, alpha: 1)
         selectedTextBackgroundColor = NSColor(srgbRed: 0.22, green: 0.29, blue: 0.38, alpha: 1)
@@ -37,8 +43,18 @@ final class TerminalPane: LocalProcessTerminalView {
 
     required init?(coder: NSCoder) { fatalError("Use init(directory:)") }
 
+    override var frame: NSRect {
+        didSet {
+            if frame.size != oldValue.size {
+                // NSSplitView sets the whole frame; AppKit need not call setFrameSize.
+                // SwiftTerm's geometry and PTY notification live in that size setter.
+                super.setFrameSize(frame.size)
+            }
+        }
+    }
+
     func setFocused(_ focused: Bool) {
-        foregroundBrightness = focused ? 1 : 0.85
+        foregroundBrightness = focused ? 1 : CGFloat(1 - Preferences.shared.inactiveTextDimming)
     }
 
     func setMaximized(_ maximized: Bool) {
@@ -56,7 +72,7 @@ final class TerminalPane: LocalProcessTerminalView {
         guard size.isFinite else { return }
         let size = min(Self.maximumFontSize, max(Self.minimumFontSize, size.rounded()))
         guard size != font.pointSize else { return }
-        font = .monospacedSystemFont(ofSize: size, weight: .regular)
+        font = Preferences.shared.font(size: size)
     }
 
     override func magnify(with event: NSEvent) {

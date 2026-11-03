@@ -3,14 +3,35 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var windows: [ObjectIdentifier: TerminalWindowController] = [:]
+    private var preferencesWindow: PreferencesWindowController?
     private var current: TerminalWindowController? {
-        (NSApp.keyWindow?.windowController ?? NSApp.mainWindow?.windowController) as? TerminalWindowController
+        (NSApp.keyWindow?.windowController as? TerminalWindowController)
+            ?? (NSApp.mainWindow?.windowController as? TerminalWindowController)
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        configureDockIcon()
+        BundledFonts.register()
+        Preferences.shared.onChange = { [weak self] change in
+            guard let self else { return }
+            windows.values.forEach { $0.applyPreferences(change) }
+            preferencesWindow?.refresh()
+        }
         buildMenu()
         newWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func configureDockIcon() {
+        guard let image = NSImage(named: "AppIcon") else { return }
+        let tile = NSApp.dockTile
+        let view = NSImageView(frame: NSRect(origin: .zero, size: tile.size))
+        view.image = image
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.imageFrameStyle = .none
+        view.autoresizingMask = [.width, .height]
+        tile.contentView = view
+        tile.display()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -45,7 +66,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc private func closePane(_ sender: Any?) {
+        if NSApp.keyWindow?.windowController is PreferencesWindowController {
+            NSApp.keyWindow?.performClose(sender)
+            return
+        }
         if let tab = current?.selectedTab { tab.close(tab.activePane) }
+    }
+
+    @objc private func showPreferences(_ sender: Any?) {
+        if preferencesWindow == nil { preferencesWindow = PreferencesWindowController() }
+        preferencesWindow?.refresh()
+        preferencesWindow?.window?.level = current?.isAlwaysOnTop == true ? .floating : .normal
+        preferencesWindow?.showWindow(sender)
+        preferencesWindow?.window?.makeKeyAndOrderFront(sender)
     }
 
     @objc private func closeTab(_ sender: Any?) {
@@ -108,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
         let app = menu("Therm2")
         add(app, "About Therm2", #selector(NSApplication.orderFrontStandardAboutPanel(_:)))
+        add(app, "Preferences…", #selector(showPreferences(_:)), ",")
         app.addItem(.separator())
         add(app, "Hide Therm2", #selector(NSApplication.hide(_:)), "h")
         add(app, "Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option])

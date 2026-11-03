@@ -26,7 +26,7 @@ struct RenderingTests {
     private func expectDimmed(_ dimmed: NSColor, original: NSColor) throws {
         let dim = try components(dimmed)
         let original = try components(original)
-        for channel in 0..<3 { #expect(abs(dim[channel] - original[channel] * 0.85) < 0.000_001) }
+        for channel in 0..<3 { #expect(abs(dim[channel] - original[channel] * 0.7) < 0.000_001) }
         #expect(dim[3] == original[3])
     }
 

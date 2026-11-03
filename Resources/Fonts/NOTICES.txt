@@ -1,0 +1,26 @@
+Bundled fonts copied unchanged from Therm (https://github.com/trufae/Therm).
+Font copyrights and embedded license statements follow. Font licenses are separate from the application license.
+
+DS-DIGI.TTF
+DS-Digital
+Font Typeface: DS-Digital. Created by Dusit Supasawat , DS-Font 1998. All Rights Reserved
+
+PowerlineSymbols.otf
+PowerlineSymbols
+Created with FontForge 2.0 (http://fontforge.sf.net)
+
+ProggySquare.ttf
+ProggySquareTT
+by Tristan Grimmer
+
+PxPlus_IBM_MDA.ttf
+PxPlus IBM MDA
+Outline (vector) version (c) 2015 VileR
+Creative Commons Attribution-ShareAlike 4.0 International
+http://creativecommons.org/licenses/by-sa/4.0/
+
+agave-r.ttf
+agave
+Copyright 2013 type agaric
+MIT X
+http://an.erki.net/~b/type/agave_license

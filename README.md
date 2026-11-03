@@ -2,7 +2,8 @@
 
 A small native macOS terminal built with AppKit and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
 Therm's essentials, starting from an empty codebase: tabs, nested splits, instant fullscreen,
-an opaque dark background, and little else. Uses Therm's original icon.
+an opaque dark background, and little else. Uses Therm's original icon, with its full
+resolution asset catalog and a Dock view that preserves the original artwork.
 
 ## Build
 
@@ -24,6 +25,7 @@ Developer ID signature and notarization.
 | Shortcut | Action |
 | --- | --- |
 | ⌘N / ⌘T | New window / tab |
+| ⌘, | Preferences |
 | ⌘D / ⇧⌘D | Split left–right / top–bottom |
 | ⌘W / ⇧⌘W / ⌥⌘W | Close pane / tab / window |
 | ⌘1…9 | Select tab |
@@ -39,7 +41,7 @@ Developer ID signature and notarization.
 | ⌘C / ⌘V | Copy selection / paste |
 
 Focus follows the mouse between panes in the active window. Inactive text is dimmed
-by 15%; terminal backgrounds keep their colors, with pure black as the default.
+by 30% initially; terminal backgrounds keep their colors, with pure black as the default.
 The active pane stays at full brightness. Drag the thin dividers to
 resize. With multiple tabs, a 14-point-high bar sits at the bottom of the window.
 Tabs divide the full width equally, without scrolling. Labels start empty and combine
@@ -87,9 +89,30 @@ Fullscreen reuses the current window, covers its current display, and auto-hides
 and menu bar. It does not create a Space or animate. Leaving fullscreen restores the previous
 window frame. The notch guard is enabled initially. View → Ignore Notch in Fullscreen
 removes the top inset so terminal content reaches the very top of the display, including
-the area around the camera. The checked state is per window.
+the area around the camera. This shares its saved setting with Preferences.
 Always on Top raises the window above normal application windows and persists across
 fullscreen toggles. Toggle it again to return to normal window ordering.
+
+## Preferences
+
+⌘, opens a small native panel for terminal background, split separator color, font family,
+inactive text dimming (0–75%), the starting directory of new tabs and splits, ignoring
+the fullscreen notch, and using an empty window title. Changes apply immediately to all
+windows and are saved automatically. Font changes preserve each pane's point size.
+An empty window title does not hide the ANSI-set names in the tab bar.
+
+The app bundles the same five font files as Therm: Agave, ProggySquareTT, PxPlus IBM MDA,
+DS-Digital, and PowerlineSymbols. They are registered only for this process; nothing is
+installed in the user's or system's font directories. The original embedded notices are
+preserved and collected in `Resources/Fonts/NOTICES.txt`. System font families remain
+available as well. Restore Defaults returns to the original colors and System Monospace.
+
+New tabs and splits inherit the active shell's directory by default. A single native
+`proc_pidinfo` lookup reads the shell PID's working directory when creating a session;
+there is no polling or extra shell command. If unavailable, the last local OSC 7 directory
+is used, then Home. Choose Home directory in Preferences to always start there. New
+windows start in Home. A program changing its own directory does not change its parent
+shell's working directory.
 
 ## Small by design
 
@@ -112,8 +135,6 @@ fullscreen toggles. Toggle it again to return to normal window ordering.
 - SwiftTerm is the only direct package dependency. Portable graphics traits are disabled.
   SwiftPM may resolve upstream development dependencies, but they are not linked into the app.
 - Login shells use the account's configured shell and inherit the launch environment.
-  New panes and tabs inherit the active pane's last local OSC 7 working directory;
-  shells without OSC 7 support retain their initial directory. A first window starts at home.
 - No telemetry, update checks, session restoration, profiles, or background services.
 
 `make test` checks nested split insertion/collapse, view release, focus cycling, minimum
@@ -123,6 +144,9 @@ cursor-key fallback, fractional travel, gesture boundaries, modifiers, and scrol
 Mouse focus, text-field focus preservation, and accumulated pinch zoom are covered too.
 Renderer checks cover foreground-only dimming, unchanged ANSI backgrounds and selection
 highlights, and restoring colors when focus changes.
+Preferences persistence and bundled font registration are covered. A real PTY test checks
+directory inheritance without OSC 7, matching kernel window size, and SIGWINCH delivery
+when a pane is split.
 Rendering throughput and resident memory still need profiling on representative workloads
 and displays.
 

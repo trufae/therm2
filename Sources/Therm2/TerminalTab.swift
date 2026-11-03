@@ -45,7 +45,7 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
             controller?.layoutChanged(in: self)
             return nil
         }
-        let pane = TerminalPane(directory: old.directory)
+        let pane = TerminalPane(directory: old.newSessionDirectory)
         pane.tab = self
         pane.processDelegate = self
         let split = SplitView(frame: old.frame)
@@ -187,7 +187,7 @@ private final class PanePlaceholder: NSView {
 
 final class SplitView: NSSplitView, NSSplitViewDelegate {
     override var dividerThickness: CGFloat { 1 }
-    override var dividerColor: NSColor { NSColor(white: 0.22, alpha: 1) }
+    override var dividerColor: NSColor { Preferences.shared.separatorColor }
 
     override init(frame: NSRect) {
         super.init(frame: frame)

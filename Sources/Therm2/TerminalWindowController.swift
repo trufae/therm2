@@ -41,13 +41,12 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private(set) var isFullscreen = false
     private var savedFrame = NSRect.zero
     private var savedStyle: NSWindow.StyleMask = []
-    private var notchGuard = true
     private let tabBar = TabBar(frame: .zero)
     private let content = NSView()
     var onClose: (() -> Void)?
     var selectedTab: TerminalTab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
     var isAlwaysOnTop: Bool { window?.level == .floating }
-    var ignoresNotchInFullscreen: Bool { !notchGuard }
+    var ignoresNotchInFullscreen: Bool { Preferences.shared.ignoreNotch }
 
     init() {
         let window = TerminalWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 600),
@@ -56,7 +55,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         window.isReleasedWhenClosed = false
-        window.backgroundColor = TerminalPane.background
+        window.backgroundColor = Preferences.shared.backgroundColor
         window.isOpaque = true
         window.hasShadow = false
         window.appearance = NSAppearance(named: .darkAqua)
@@ -76,7 +75,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     required init?(coder: NSCoder) { fatalError("Use init()") }
 
     func newTab() {
-        let tab = TerminalTab(directory: selectedTab?.activePane.directory ?? NSHomeDirectory())
+        let tab = TerminalTab(directory: selectedTab?.activePane.newSessionDirectory ?? NSHomeDirectory())
         tab.controller = self
         tabs.append(tab)
         selectTab(at: tabs.count - 1)
@@ -125,7 +124,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     func refreshChrome() {
         let title = selectedTab?.activePane.title ?? ""
-        window?.title = title.isEmpty ? "Therm2" : title
+        window?.title = Preferences.shared.emptyWindowTitle ? "" : (title.isEmpty ? "Therm2" : title)
         tabBar.isHidden = tabs.count < 2
         tabBar.update(titles: tabs.map(\.title), selected: selectedIndex)
         layoutContent()
@@ -134,7 +133,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private func layoutContent() {
         guard let tab = selectedTab else { return }
         let barHeight = tabs.count > 1 ? TabBar.height : 0
-        let safeTop = isFullscreen && notchGuard ? (window?.screen?.safeAreaInsets.top ?? 0) : 0
+        let safeTop = isFullscreen && !ignoresNotchInFullscreen ? (window?.screen?.safeAreaInsets.top ?? 0) : 0
         let height = max(0, content.bounds.height - safeTop - barHeight)
         tab.displayedView.frame = NSRect(x: 0, y: barHeight, width: content.bounds.width, height: height)
         tabBar.frame = NSRect(x: 0, y: 0, width: content.bounds.width, height: barHeight)
@@ -165,8 +164,32 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func toggleNotchGuard() {
-        notchGuard.toggle()
-        layoutContent()
+        Preferences.shared.ignoreNotch.toggle()
+    }
+
+    func applyPreferences(_ change: Preferences.Change) {
+        let preferences = Preferences.shared
+        switch change {
+        case .background:
+            window?.backgroundColor = preferences.backgroundColor
+            for pane in tabs.flatMap(\.panes) { pane.nativeBackgroundColor = preferences.backgroundColor }
+        case .font:
+            for pane in tabs.flatMap(\.panes) { pane.font = preferences.font(size: pane.font.pointSize) }
+        case .dimming:
+            for tab in tabs {
+                for pane in tab.panes { pane.setFocused(pane === tab.activePane) }
+            }
+        case .separator:
+            func redraw(_ view: NSView) {
+                guard let split = view as? SplitView else { return }
+                split.needsDisplay = true
+                split.subviews.forEach { redraw($0) }
+            }
+            tabs.forEach { redraw($0.root) }
+        case .notch: layoutContent()
+        case .title: refreshChrome()
+        case .directory: break
+        }
     }
 
     func toggleAlwaysOnTop() {
