@@ -1,0 +1,24 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.06275,0.06275,0.06275,1.00000",
+      "srgb:0.06275,0.06275,0.06275,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "blur-material": null,
+      "layers": [
+        {
+          "image-name": "terminal.png",
+          "name": "Therm",
+          "position": { "scale": 1, "translation-in-points": [0, 0] }
+        }
+      ],
+      "shadow": { "kind": "neutral", "opacity": 0 },
+      "specular": false,
+      "translucency": { "enabled": false, "value": 0 }
+    }
+  ],
+  "supported-platforms": { "squares": "shared" }
+}
