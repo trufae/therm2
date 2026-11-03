@@ -3,17 +3,27 @@ set -eu
 cd "$(dirname "$0")/.."
 
 version=$(./version.sh)
-./scripts/build.sh release --arch arm64 --arch x86_64
-app=build/Therm2.app
-binary="$app/Contents/MacOS/Therm2"
-for arch in arm64 x86_64; do
-    lipo "$binary" -verify_arch "$arch"
-done
-codesign --verify --strict "$app"
-
+mkdir -p build
 work=$(mktemp -d build/.therm2-dmg.XXXXXX)
 trap 'rm -rf "$work"' EXIT
 trap 'exit 1' HUP INT TERM
+
+app=build/Therm2.app
+binary="$app/Contents/MacOS/Therm2"
+# Multi-architecture SwiftPM builds use Xcode's build system, which fails to
+# resolve SwiftTermBuildInfoPlugin. Build each slice with native SwiftPM instead.
+for arch in arm64 x86_64; do
+    ./scripts/build.sh release --build-system native --arch "$arch"
+    cp "$binary" "$work/Therm2-$arch"
+done
+lipo -create "$work/Therm2-arm64" "$work/Therm2-x86_64" -output "$work/Therm2"
+mv -f "$work/Therm2" "$binary"
+for arch in arm64 x86_64; do
+    lipo "$binary" -verify_arch "$arch"
+done
+codesign --force --sign - "$app"
+codesign --verify --strict "$app"
+
 mkdir "$work/staging"
 ditto "$app" "$work/staging/Therm2.app"
 ln -s /Applications "$work/staging/Applications"
