@@ -1,12 +1,15 @@
 APP     = build/Therm2.app
 DESTDIR = $(HOME)/Applications
-.PHONY: all debug run prepare test icons install uninstall sign clean
+.PHONY: all debug dmg run prepare test icons install uninstall sign clean
 
 all:
 	./scripts/build.sh release
 
 debug:
 	./scripts/build.sh debug
+
+dmg:
+	./scripts/package-dmg.sh
 
 run: all
 	open $(APP)

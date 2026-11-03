@@ -2,24 +2,137 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ['**']
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
   build-and-test:
-    name: Build and test
+    name: Build, test and package
     runs-on: macos-26
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 1
+          persist-credentials: false
 
       - name: Show toolchain
-        run: swift --version
+        run: |
+          xcodebuild -version
+          swift --version
 
-      - name: Build
-        run: ./scripts/build.sh debug
+      - name: Read version and validate release tag
+        id: version
+        run: |
+          version=$(./version.sh)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app version v$version"
+            exit 1
+          fi
 
       - name: Test
-        run: ./scripts/test.sh
+        run: make test
+
+      - name: Build universal app and DMG
+        run: make dmg
+
+      - name: Upload DMG and checksum
+        id: upload
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: Therm2-${{ steps.version.outputs.version }}-universal-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            build/Therm2-${{ steps.version.outputs.version }}-universal.dmg
+            build/Therm2-${{ steps.version.outputs.version }}-universal.dmg.sha256
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+
+  release:
+    name: Publish GitHub Release
+    needs: build-and-test
+    if: >-
+      github.event_name != 'pull_request' &&
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      APP_VERSION: ${{ needs.build-and-test.outputs.version }}
+    steps:
+      - name: Download tested artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          artifact-ids: ${{ needs.build-and-test.outputs.artifact-id }}
+          path: dist
+
+      - name: Verify checksum
+        working-directory: dist
+        run: sha256sum --check "Therm2-$APP_VERSION-universal.dmg.sha256"
+
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --verify-tag \
+              --title "Therm2 $APP_VERSION" --generate-notes
+          fi
+
+      - name: Update continuous prerelease
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # A slow older build must not replace the newest main download.
+          head=$(gh api "repos/$GH_REPO/git/ref/heads/main" --jq .object.sha)
+          if [[ "$head" != "$GITHUB_SHA" ]]; then
+            echo 'A newer commit is on main; keeping this build in Actions artifacts.'
+            exit 0
+          fi
+          cat > notes.md <<EOF
+          Latest tested build from main: $GITHUB_SHA (version $APP_VERSION).
+
+          Universal macOS app for Apple Silicon and Intel, macOS 13 or newer.
+          Open the DMG and drag Therm2 to Applications.
+          The app is ad-hoc signed and is not notarized by Apple.
+          EOF
+          if gh api "repos/$GH_REPO/git/ref/tags/continuous" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/continuous" \
+              -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" \
+              -f ref=refs/tags/continuous -f sha="$GITHUB_SHA"
+          fi
+          if ! gh release view continuous >/dev/null 2>&1; then
+            gh release create continuous --verify-tag --prerelease \
+              --latest=false --title 'Continuous build' --notes-file notes.md --draft
+          fi
+          # Stable asset names prevent old versions accumulating in this release.
+          cp "dist/Therm2-$APP_VERSION-universal.dmg" dist/Therm2-continuous-universal.dmg
+          (
+            cd dist
+            sha256sum Therm2-continuous-universal.dmg > Therm2-continuous-universal.dmg.sha256
+          )
+          gh release upload continuous dist/Therm2-continuous-universal.dmg \
+            dist/Therm2-continuous-universal.dmg.sha256 --clobber
+          gh release edit continuous --draft=false --prerelease --latest=false \
+            --title 'Continuous build' --notes-file notes.md

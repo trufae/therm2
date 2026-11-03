@@ -5,7 +5,8 @@
 <img src="docs/AppIcon.png" width="128" alt="Therm2 app icon">
 
 A small native macOS terminal built with AppKit and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
-Therm's essentials, starting from an empty codebase: tabs, nested splits, instant fullscreen,
+Inspired by the original [Therm](https://github.com/trufae/Therm), written in Objective-C.
+Therm2 recreates its essentials from an empty Swift codebase: tabs, nested splits, instant fullscreen,
 an opaque dark background, and little else. The icon is a dark terminal with a simple
 prompt, authored as vector artwork in an Icon Composer document. macOS supplies the
 icon shape and corners; there is no extra tile, silver bezel, or custom Dock view.
