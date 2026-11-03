@@ -20,6 +20,7 @@ make          # optimized, ad-hoc signed build/Therm2.app
 make run
 make test
 make dmg      # universal release app + DMG and SHA-256 checksum in build/
+make install  # Copy Therm2.app into /Applications
 ```
 
 Use `make debug` for a debug app bundle, then attach Xcode or LLDB to the running app.
