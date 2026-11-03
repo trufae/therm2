@@ -3,7 +3,7 @@ import SwiftTerm
 
 /// The terminal view owns its PTY. No second session model or output buffering.
 final class TerminalPane: LocalProcessTerminalView {
-    static let defaultFontSize: CGFloat = 13
+    static var defaultFontSize: CGFloat { Preferences.shared.defaultFontSize }
     static let minimumFontSize: CGFloat = 4
     static let maximumFontSize: CGFloat = 1024
     static let background = NSColor.black

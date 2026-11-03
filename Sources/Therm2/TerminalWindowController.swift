@@ -4,6 +4,12 @@ final class TerminalWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
+        // The fullscreen backing must cover the menu bar/notch strip as well.
+        if (windowController as? TerminalWindowController)?.isFullscreen == true { return frameRect }
+        return super.constrainFrameRect(frameRect, to: screen)
+    }
+
     override func sendEvent(_ event: NSEvent) {
         if isKeyWindow, event.type == .mouseMoved { focusPane(at: event.locationInWindow) }
         super.sendEvent(event)
@@ -145,6 +151,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         guard let window, let screen = window.screen ?? NSScreen.main else { return }
         if isFullscreen {
             isFullscreen = false
+            window.backgroundColor = Preferences.shared.backgroundColor
             window.styleMask = savedStyle
             // If a monitor disappeared, return to a visible part of the current display.
             let frame = NSScreen.screens.contains(where: { $0.visibleFrame.intersects(savedFrame) })
@@ -154,6 +161,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             savedFrame = window.frame
             savedStyle = window.styleMask
             isFullscreen = true
+            window.backgroundColor = .black
             window.styleMask = .borderless
             window.setFrame(screen.frame, display: true, animate: false)
         }
@@ -171,10 +179,12 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         let preferences = Preferences.shared
         switch change {
         case .background:
-            window?.backgroundColor = preferences.backgroundColor
+            window?.backgroundColor = isFullscreen ? .black : preferences.backgroundColor
             for pane in tabs.flatMap(\.panes) { pane.nativeBackgroundColor = preferences.backgroundColor }
         case .font:
             for pane in tabs.flatMap(\.panes) { pane.font = preferences.font(size: pane.font.pointSize) }
+        case .fontSize:
+            for pane in tabs.flatMap(\.panes) { pane.setFontSize(preferences.defaultFontSize) }
         case .dimming:
             for tab in tabs {
                 for pane in tab.panes { pane.setFocused(pane === tab.activePane) }

@@ -35,7 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     func updatePresentation() {
         let fullscreen = NSApp.isActive && (NSApp.keyWindow?.windowController as? TerminalWindowController)?.isFullscreen == true
-        let options: NSApplication.PresentationOptions = fullscreen ? [.autoHideDock, .autoHideMenuBar] : []
+        let options: NSApplication.PresentationOptions = fullscreen
+            ? [.autoHideDock, .autoHideMenuBar, .disableMenuBarTransparency] : []
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
     }
 

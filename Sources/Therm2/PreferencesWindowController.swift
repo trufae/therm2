@@ -1,27 +1,29 @@
 import AppKit
 
-final class PreferencesWindowController: NSWindowController {
+final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate {
     private let preferences: Preferences
     private let background = NSColorWell()
     private let separator = NSColorWell()
     private let fontFamily = NSPopUpButton()
+    private let fontSize = NSTextField(string: "13")
+    private let fontSizeStepper = NSStepper()
     private let directory = NSPopUpButton()
-    private let dimming = NSSlider(value: 30, minValue: 0, maxValue: 75, target: nil, action: nil)
+    private let dimming = NSSlider(value: 45, minValue: 0, maxValue: 75, target: nil, action: nil)
     private let dimmingValue = NSTextField(labelWithString: "30%")
     private let notch = NSButton(checkboxWithTitle: "Ignore notch in fullscreen", target: nil, action: nil)
     private let emptyTitle = NSButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
-    private let preview = NSTextField(labelWithString: "$ echo 'Hello, world'  0123456789")
+    private let preview: PreferencesPreview
 
     init(preferences: Preferences = .shared) {
         self.preferences = preferences
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 440, height: 380),
+        preview = PreferencesPreview(preferences: preferences)
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
                             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init(window: panel)
         panel.title = "Preferences"
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.appearance = NSAppearance(named: .darkAqua)
-        panel.center()
 
         background.target = self
         background.action = #selector(backgroundChanged)
@@ -44,6 +46,27 @@ final class PreferencesWindowController: NSWindowController {
             where !bundled.contains(family) { addFont(family) }
         fontFamily.widthAnchor.constraint(equalToConstant: 220).isActive = true
 
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.allowsFloats = false
+        formatter.minimum = NSNumber(value: Double(TerminalPane.minimumFontSize))
+        formatter.maximum = NSNumber(value: Double(TerminalPane.maximumFontSize))
+        fontSize.formatter = formatter
+        fontSize.alignment = .right
+        fontSize.delegate = self
+        fontSize.target = self
+        fontSize.action = #selector(fontSizeChanged)
+        fontSize.setAccessibilityLabel("Default font size in points")
+        fontSize.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        fontSizeStepper.minValue = Double(TerminalPane.minimumFontSize)
+        fontSizeStepper.maxValue = Double(TerminalPane.maximumFontSize)
+        fontSizeStepper.increment = 1
+        fontSizeStepper.target = self
+        fontSizeStepper.action = #selector(fontSizeStepped)
+        fontSizeStepper.setAccessibilityLabel("Adjust default font size")
+        let sizeControls = NSStackView(views: [fontSize, fontSizeStepper, NSTextField(labelWithString: "pt · ⌘0")])
+        sizeControls.spacing = 6
+
         directory.addItems(withTitles: ["Active terminal's directory", "Home directory"])
         directory.target = self
         directory.action = #selector(directoryChanged)
@@ -62,6 +85,7 @@ final class PreferencesWindowController: NSWindowController {
             [NSTextField(labelWithString: "Background"), background],
             [NSTextField(labelWithString: "Split separator"), separator],
             [NSTextField(labelWithString: "Font family"), fontFamily],
+            [NSTextField(labelWithString: "Default font size"), sizeControls],
             [NSTextField(labelWithString: "Inactive text dimming"), dimmingControls],
             [NSTextField(labelWithString: "New tabs and splits"), directory]
         ])
@@ -78,8 +102,15 @@ final class PreferencesWindowController: NSWindowController {
         checkboxes.orientation = .vertical
         checkboxes.alignment = .leading
         checkboxes.spacing = 8
-        preview.lineBreakMode = .byTruncatingTail
-        preview.setAccessibilityLabel("Font preview")
+        let previewLabel = NSTextField(labelWithString: "Preview · Default size (⌘0)")
+        previewLabel.font = .systemFont(ofSize: 11)
+        previewLabel.textColor = .secondaryLabelColor
+        let previewStack = NSStackView(views: [previewLabel, preview])
+        previewStack.orientation = .vertical
+        previewStack.alignment = .leading
+        previewStack.spacing = 6
+        preview.widthAnchor.constraint(equalTo: previewStack.widthAnchor).isActive = true
+        preview.heightAnchor.constraint(equalToConstant: 100).isActive = true
 
         let reset = NSButton(title: "Restore Defaults", target: self, action: #selector(resetPreferences))
         reset.bezelStyle = .rounded
@@ -88,7 +119,7 @@ final class PreferencesWindowController: NSWindowController {
         saved.textColor = .secondaryLabelColor
         let footer = NSStackView(views: [saved, reset])
         footer.spacing = 24
-        let stack = NSStackView(views: [grid, checkboxes, preview, footer])
+        let stack = NSStackView(views: [grid, checkboxes, previewStack, footer])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 18
@@ -97,11 +128,14 @@ final class PreferencesWindowController: NSWindowController {
         content.addSubview(stack)
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -20),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -20)
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
+            previewStack.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
         refresh()
+        panel.setContentSize(NSSize(width: 480, height: stack.fittingSize.height + 40))
+        panel.center()
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(preferences:)") }
@@ -111,12 +145,14 @@ final class PreferencesWindowController: NSWindowController {
         separator.color = preferences.separatorColor
         let index = fontFamily.itemArray.firstIndex { ($0.representedObject as? String) == preferences.fontFamily } ?? 0
         fontFamily.selectItem(at: index)
+        fontSize.integerValue = Int(preferences.defaultFontSize)
+        fontSizeStepper.doubleValue = Double(preferences.defaultFontSize)
         directory.selectItem(at: preferences.directoryMode == .inherit ? 0 : 1)
-        dimming.doubleValue = preferences.inactiveTextDimming * 100
-        dimmingValue.stringValue = "\(Int(dimming.doubleValue.rounded()))%"
+        dimming.doubleValue = dimming.maxValue - preferences.inactiveTextDimming * 100
+        dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
         notch.state = preferences.ignoreNotch ? .on : .off
         emptyTitle.state = preferences.emptyWindowTitle ? .on : .off
-        preview.font = preferences.font(size: 13)
+        preview.needsDisplay = true
     }
 
     private func addFont(_ family: String) {
@@ -124,11 +160,29 @@ final class PreferencesWindowController: NSWindowController {
         fontFamily.lastItem?.representedObject = family
     }
 
-    @objc private func backgroundChanged() { preferences.backgroundColor = background.color }
-    @objc private func separatorChanged() { preferences.separatorColor = separator.color }
-    @objc private func fontChanged() { preferences.fontFamily = fontFamily.selectedItem?.representedObject as? String }
+    @objc private func backgroundChanged() { preferences.backgroundColor = background.color; preview.needsDisplay = true }
+    @objc private func separatorChanged() { preferences.separatorColor = separator.color; preview.needsDisplay = true }
+    @objc private func fontChanged() {
+        preferences.fontFamily = fontFamily.selectedItem?.representedObject as? String
+        preview.needsDisplay = true
+    }
+    @objc private func fontSizeChanged() {
+        preferences.defaultFontSize = CGFloat(fontSize.doubleValue)
+        refresh()
+    }
+    @objc private func fontSizeStepped() {
+        preferences.defaultFontSize = CGFloat(fontSizeStepper.doubleValue)
+        refresh()
+    }
+    func controlTextDidEndEditing(_ notification: Notification) {
+        if notification.object as? NSTextField === fontSize { fontSizeChanged() }
+    }
     @objc private func directoryChanged() { preferences.directoryMode = directory.indexOfSelectedItem == 0 ? .inherit : .home }
-    @objc private func dimmingChanged() { preferences.inactiveTextDimming = dimming.doubleValue.rounded() / 100 }
+    @objc private func dimmingChanged() {
+        preferences.inactiveTextDimming = (dimming.maxValue - dimming.doubleValue).rounded() / 100
+        dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
+        preview.needsDisplay = true
+    }
     @objc private func notchChanged() { preferences.ignoreNotch = notch.state == .on }
     @objc private func emptyTitleChanged() { preferences.emptyWindowTitle = emptyTitle.state == .on }
     @objc private func resetPreferences() { preferences.reset(); refresh() }

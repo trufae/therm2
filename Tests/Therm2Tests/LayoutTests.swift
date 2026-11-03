@@ -12,6 +12,36 @@ struct LayoutTests {
         return tab
     }
 
+    @Test func fullscreenCoversMenuBarWithBlackBackingAndRestoresWindow() throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        let screen = try #require(window.screen ?? NSScreen.main)
+        let preferences = Preferences.shared
+        let originalBackground = preferences.backgroundColor
+        defer {
+            if controller.isFullscreen { controller.toggleFullscreen() }
+            window.close()
+            preferences.backgroundColor = originalBackground
+        }
+        preferences.backgroundColor = .blue
+        controller.applyPreferences(.background)
+        let originalFrame = window.frame
+        let originalStyle = window.styleMask
+        controller.toggleFullscreen()
+        #expect(controller.isFullscreen)
+        #expect(window.frame == screen.frame)
+        #expect(window.backgroundColor == .black)
+        #expect(window.constrainFrameRect(screen.frame, to: screen) == screen.frame)
+        preferences.backgroundColor = .red
+        controller.applyPreferences(.background)
+        #expect(window.backgroundColor == .black)
+        controller.toggleFullscreen()
+        #expect(!controller.isFullscreen)
+        #expect(window.styleMask == originalStyle)
+        #expect(window.frame == originalFrame)
+        #expect(window.backgroundColor == .red)
+    }
+
     @Test func mixedSplitsPreserveSessionsAndCollapseToOriginalPane() throws {
         let tab = tab()
         let original = tab.activePane

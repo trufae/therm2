@@ -62,7 +62,7 @@ a confirmation dialog.
 Option uses the native keyboard layout, including Spanish ⌥º for `\`, ⌥3 for `#`, and dead-key accents.
 It is not mapped to Meta; use Escape followed by a key for terminal Meta combinations.
 Pinch over a pane to change its font size. Pinch and ⌘+/⌘− share the same 4–1024 point
-range; ⌘0 restores 13 points, and ⌘= also increases the size. Pinch travel accumulates
+range; ⌘0 restores the default size from Preferences (initially 13 points), and ⌘= also increases the size. Pinch travel accumulates
 smoothly, with glyph caches rebuilt only when the size crosses a whole-point step.
 Holding a key repeats it using the system repeat rate and delay; the app disables the
 macOS press-and-hold accent picker, while dead-key composition remains available.
@@ -88,7 +88,8 @@ checkout does not apply the patches. `make prepare` applies them without buildin
 
 Fullscreen reuses the current window, covers its current display, and auto-hides the Dock
 and menu bar. It does not create a Space or animate. Leaving fullscreen restores the previous
-window frame. The notch guard is enabled initially. View → Ignore Notch in Fullscreen
+window frame. The menu bar/notch strip has a black backing in fullscreen, and the revealed
+menu bar uses an opaque background. The notch guard is enabled initially. View → Ignore Notch in Fullscreen
 removes the top inset so terminal content reaches the very top of the display, including
 the area around the camera. This shares its saved setting with Preferences.
 Always on Top raises the window above normal application windows and persists across
@@ -96,10 +97,12 @@ fullscreen toggles. Toggle it again to return to normal window ordering.
 
 ## Preferences
 
-⌘, opens a small native panel for terminal background, split separator color, font family,
+⌘, opens a small native panel for terminal background, split separator color, font family and default size,
 inactive text dimming (0–75%), the starting directory of new tabs and splits, ignoring
 the fullscreen notch, and using an empty window title. Changes apply immediately to all
-windows and are saved automatically. Font changes preserve each pane's point size.
+windows and are saved automatically. Font family changes preserve each pane's point size;
+changing the default size applies it to existing panes, new panes, and ⌘0.
+A compact preview shows the default font size, background, separator, and inactive text dimming.
 An empty window title does not hide the ANSI-set names in the tab bar.
 
 The app bundles the same five font files as Therm: Agave, ProggySquareTT, PxPlus IBM MDA,

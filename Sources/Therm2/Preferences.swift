@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, separator, font, dimming, notch, directory, title }
+    enum Change { case background, separator, font, fontSize, dimming, notch, directory, title }
     enum DirectoryMode: String { case inherit, home }
     private let defaults: UserDefaults
     var onChange: ((Change) -> Void)?
@@ -27,6 +27,15 @@ final class Preferences {
             guard fontFamily != oldValue else { return }
             defaults.set(fontFamily, forKey: "fontFamily")
             onChange?(.font)
+        }
+    }
+    var defaultFontSize: CGFloat {
+        didSet {
+            defaultFontSize = defaultFontSize.isFinite
+                ? min(TerminalPane.maximumFontSize, max(TerminalPane.minimumFontSize, defaultFontSize.rounded())) : oldValue
+            guard defaultFontSize != oldValue else { return }
+            defaults.set(Double(defaultFontSize), forKey: "defaultFontSize")
+            onChange?(.fontSize)
         }
     }
     var inactiveTextDimming: Double {
@@ -64,6 +73,9 @@ final class Preferences {
         backgroundColor = Self.color(defaults, key: "backgroundColor") ?? .black
         separatorColor = Self.color(defaults, key: "separatorColor") ?? NSColor(white: 0.22, alpha: 1)
         fontFamily = defaults.string(forKey: "fontFamily").flatMap { $0.isEmpty ? nil : $0 }
+        let size = defaults.object(forKey: "defaultFontSize") as? Double ?? 13
+        defaultFontSize = size.isFinite && (TerminalPane.minimumFontSize...TerminalPane.maximumFontSize).contains(CGFloat(size))
+            ? CGFloat(size.rounded()) : 13
         let dimming = defaults.object(forKey: "inactiveTextDimming") as? Double ?? 0.3
         inactiveTextDimming = dimming.isFinite && (0...0.75).contains(dimming) ? dimming : 0.3
         ignoreNotch = defaults.bool(forKey: "ignoreNotch")
@@ -82,6 +94,7 @@ final class Preferences {
         backgroundColor = .black
         separatorColor = NSColor(white: 0.22, alpha: 1)
         fontFamily = nil
+        defaultFontSize = 13
         inactiveTextDimming = 0.3
         ignoreNotch = false
         directoryMode = .inherit
