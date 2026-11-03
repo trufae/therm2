@@ -2,8 +2,9 @@
 
 A small native macOS terminal built with AppKit and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
 Therm's essentials, starting from an empty codebase: tabs, nested splits, instant fullscreen,
-an opaque dark background, and little else. Uses Therm's original icon, with its full
-resolution asset catalog and a Dock view that preserves the original artwork.
+an opaque dark background, and little else. The icon is a dark terminal with a simple
+prompt, authored as vector artwork in an Icon Composer document. macOS supplies the
+icon shape and corners; there is no extra tile, silver bezel, or custom Dock view.
 
 ## Build
 

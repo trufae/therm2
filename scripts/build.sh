@@ -10,7 +10,7 @@ swift build --scratch-path "$scratch" --configuration "$configuration" --product
 bin_dir=$(swift build --scratch-path "$scratch" --configuration "$configuration" --show-bin-path "$@")
 app=build/Therm2.app
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-xcrun actool Resources/Assets.xcassets --compile "$app/Contents/Resources" \
+xcrun actool Resources/AppIcon.icon --compile "$app/Contents/Resources" \
     --platform macosx --minimum-deployment-target 13.0 --target-device mac \
     --app-icon AppIcon --output-partial-info-plist "$scratch/icon-info.plist" \
     --output-format human-readable-text --warnings --errors > "$scratch/icon-build.log" 2>&1 || {
@@ -20,7 +20,6 @@ xcrun actool Resources/Assets.xcassets --compile "$app/Contents/Resources" \
 binary="$app/Contents/MacOS/Therm2"
 cp "$bin_dir/Therm2" "$binary.tmp"
 cp Resources/Info.plist "$app/Contents/Info.plist"
-cp Resources/AppIcon.icns "$app/Contents/Resources/AppIcon.icns"
 cp COPYING "$app/Contents/Resources/COPYING"
 cp Resources/SwiftTerm-LICENSE "$app/Contents/Resources/SwiftTerm-LICENSE"
 mkdir -p "$app/Contents/Resources/Fonts"

@@ -10,7 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        configureDockIcon()
         BundledFonts.register()
         Preferences.shared.onChange = { [weak self] change in
             guard let self else { return }
@@ -20,18 +19,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         buildMenu()
         newWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func configureDockIcon() {
-        guard let image = NSImage(named: "AppIcon") else { return }
-        let tile = NSApp.dockTile
-        let view = NSImageView(frame: NSRect(origin: .zero, size: tile.size))
-        view.image = image
-        view.imageScaling = .scaleProportionallyUpOrDown
-        view.imageFrameStyle = .none
-        view.autoresizingMask = [.width, .height]
-        tile.contentView = view
-        tile.display()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
