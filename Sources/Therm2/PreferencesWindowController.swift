@@ -11,6 +11,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let dimming = NSSlider(value: 45, minValue: 0, maxValue: 75, target: nil, action: nil)
     private let dimmingValue = NSTextField(labelWithString: "30%")
     private let notch = NSButton(checkboxWithTitle: "Ignore notch in fullscreen", target: nil, action: nil)
+    private let nativeFullscreen = NSButton(checkboxWithTitle: "Use native fullscreen", target: nil, action: nil)
     private let emptyTitle = NSButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
     private let preview: PreferencesPreview
 
@@ -96,9 +97,12 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         grid.yPlacement = .center
         notch.target = self
         notch.action = #selector(notchChanged)
+        nativeFullscreen.target = self
+        nativeFullscreen.action = #selector(nativeFullscreenChanged)
+        nativeFullscreen.toolTip = "Use a macOS fullscreen Space. Uncheck for instant fullscreen. Applies the next time you enter fullscreen."
         emptyTitle.target = self
         emptyTitle.action = #selector(emptyTitleChanged)
-        let checkboxes = NSStackView(views: [notch, emptyTitle])
+        let checkboxes = NSStackView(views: [nativeFullscreen, notch, emptyTitle])
         checkboxes.orientation = .vertical
         checkboxes.alignment = .leading
         checkboxes.spacing = 8
@@ -151,6 +155,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         dimming.doubleValue = dimming.maxValue - preferences.inactiveTextDimming * 100
         dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
         notch.state = preferences.ignoreNotch ? .on : .off
+        nativeFullscreen.state = preferences.useNativeFullscreen ? .on : .off
         emptyTitle.state = preferences.emptyWindowTitle ? .on : .off
         preview.needsDisplay = true
     }
@@ -184,6 +189,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         preview.needsDisplay = true
     }
     @objc private func notchChanged() { preferences.ignoreNotch = notch.state == .on }
+    @objc private func nativeFullscreenChanged() { preferences.useNativeFullscreen = nativeFullscreen.state == .on }
     @objc private func emptyTitleChanged() { preferences.emptyWindowTitle = emptyTitle.state == .on }
     @objc private func resetPreferences() { preferences.reset(); refresh() }
 }

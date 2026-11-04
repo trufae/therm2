@@ -13,10 +13,13 @@ struct LayoutTests {
     }
 
     @Test func fullscreenCoversMenuBarWithBlackBackingAndRestoresWindow() throws {
+        let preferences = Preferences.shared
+        let originalNativeFullscreen = preferences.useNativeFullscreen
+        preferences.useNativeFullscreen = false
+        defer { preferences.useNativeFullscreen = originalNativeFullscreen }
         let controller = TerminalWindowController()
         let window = try #require(controller.window)
         let screen = try #require(window.screen ?? NSScreen.main)
-        let preferences = Preferences.shared
         let originalBackground = preferences.backgroundColor
         defer {
             if controller.isFullscreen { controller.toggleFullscreen() }
@@ -40,6 +43,37 @@ struct LayoutTests {
         #expect(window.styleMask == originalStyle)
         #expect(window.frame == originalFrame)
         #expect(window.backgroundColor == .red)
+    }
+
+    @Test func changingFullscreenModeWhileFastFullscreenRestoresWindowBeforeUsingNativeMode() throws {
+        let preferences = Preferences.shared
+        let original = preferences.useNativeFullscreen
+        preferences.useNativeFullscreen = false
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer {
+            if controller.isFastFullscreen { controller.toggleFullscreen() }
+            window.close()
+            preferences.useNativeFullscreen = original
+        }
+        let frame = window.frame
+        let style = window.styleMask
+        #expect(window.collectionBehavior.contains(.fullScreenNone))
+        controller.toggleFullscreen()
+        #expect(controller.isFastFullscreen)
+        preferences.useNativeFullscreen = true
+        controller.applyPreferences(.fullscreen)
+        #expect(controller.isFastFullscreen)
+        controller.toggleFullscreen()
+        #expect(!controller.isFullscreen)
+        #expect(window.frame == frame)
+        #expect(window.styleMask == style)
+        #expect(window.collectionBehavior.contains(.fullScreenPrimary))
+        preferences.useNativeFullscreen = false
+        controller.applyPreferences(.fullscreen)
+        #expect(window.collectionBehavior.contains(.fullScreenNone))
+        controller.toggleFullscreen()
+        #expect(controller.isFastFullscreen)
     }
 
     @Test func mixedSplitsPreserveSessionsAndCollapseToOriginalPane() throws {

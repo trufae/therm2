@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, separator, font, fontSize, dimming, notch, directory, title }
+    enum Change { case background, separator, font, fontSize, dimming, notch, fullscreen, directory, title }
     enum DirectoryMode: String { case inherit, home }
     private let defaults: UserDefaults
     var onChange: ((Change) -> Void)?
@@ -53,6 +53,13 @@ final class Preferences {
             onChange?(.notch)
         }
     }
+    var useNativeFullscreen: Bool {
+        didSet {
+            guard useNativeFullscreen != oldValue else { return }
+            defaults.set(useNativeFullscreen, forKey: "useNativeFullscreen")
+            onChange?(.fullscreen)
+        }
+    }
     var directoryMode: DirectoryMode {
         didSet {
             guard directoryMode != oldValue else { return }
@@ -79,6 +86,7 @@ final class Preferences {
         let dimming = defaults.object(forKey: "inactiveTextDimming") as? Double ?? 0.3
         inactiveTextDimming = dimming.isFinite && (0...0.75).contains(dimming) ? dimming : 0.3
         ignoreNotch = defaults.bool(forKey: "ignoreNotch")
+        useNativeFullscreen = defaults.bool(forKey: "useNativeFullscreen")
         directoryMode = DirectoryMode(rawValue: defaults.string(forKey: "directoryMode") ?? "") ?? .inherit
         emptyWindowTitle = defaults.bool(forKey: "emptyWindowTitle")
     }
@@ -97,6 +105,7 @@ final class Preferences {
         defaultFontSize = 13
         inactiveTextDimming = 0.3
         ignoreNotch = false
+        useNativeFullscreen = false
         directoryMode = .inherit
         emptyWindowTitle = false
     }

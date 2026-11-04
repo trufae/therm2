@@ -139,7 +139,7 @@ after resolution. The preparation is idempotent and fails on an unexpected upstr
 revision or conflicting edits. Use these build targets; a raw `swift build` after a fresh
 checkout does not apply the patches. `make prepare` applies them without building the app.
 
-Fullscreen reuses the current window, covers its current display, and auto-hides the Dock
+By default, fast fullscreen reuses the current window, covers its current display, and auto-hides the Dock
 and menu bar. It does not create a Space or animate. Leaving fullscreen restores the previous
 window frame. The menu bar/notch strip has a black backing in fullscreen, and the revealed
 menu bar uses an opaque background. The notch guard is enabled initially. View → Ignore Notch in Fullscreen
@@ -147,12 +147,15 @@ removes the top inset so terminal content reaches the very top of the display, i
 the area around the camera. This shares its saved setting with Preferences.
 Always on Top raises the window above normal application windows and persists across
 fullscreen toggles. Toggle it again to return to normal window ordering.
+Enable **Use native fullscreen** in Preferences to use a macOS fullscreen Space instead.
+⌘Enter and the green window button use the selected mode. This setting is saved and takes
+effect the next time you enter fullscreen; exiting still leaves whichever mode is active.
 
 ## Preferences
 
 ⌘, opens a small native panel for terminal background, split separator color, font family and default size,
 inactive text dimming (0–75%), the starting directory of new tabs and splits, ignoring
-the fullscreen notch, and using an empty window title. Changes apply immediately to all
+the fullscreen notch, native fullscreen, and using an empty window title. Changes apply to all
 windows and are saved automatically. Font family changes preserve each pane's point size;
 changing the default size applies it to existing panes, new panes, and ⌘0.
 A compact preview shows the default font size, background, separator, and inactive text dimming.

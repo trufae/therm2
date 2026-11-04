@@ -11,12 +11,14 @@ struct PreferencesTests {
         let defaults = try #require(UserDefaults(suiteName: domain))
         defer { defaults.removePersistentDomain(forName: domain) }
         let preferences = Preferences(defaults: defaults)
+        #expect(!preferences.useNativeFullscreen)
         preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 0.2)
         preferences.separatorColor = .red
         preferences.fontFamily = "Menlo"
         preferences.defaultFontSize = 18
         preferences.inactiveTextDimming = 0.5
         preferences.ignoreNotch = true
+        preferences.useNativeFullscreen = true
         preferences.directoryMode = .home
         preferences.emptyWindowTitle = true
         let loaded = Preferences(defaults: defaults)
@@ -28,6 +30,7 @@ struct PreferencesTests {
         #expect(loaded.font(size: 24).pointSize == 24)
         #expect(loaded.inactiveTextDimming == 0.5)
         #expect(loaded.ignoreNotch)
+        #expect(loaded.useNativeFullscreen)
         #expect(loaded.directoryMode == .home)
         #expect(loaded.emptyWindowTitle)
         loaded.reset()
@@ -36,6 +39,7 @@ struct PreferencesTests {
         #expect(reset.defaultFontSize == 13)
         #expect(reset.inactiveTextDimming == 0.3)
         #expect(!reset.ignoreNotch)
+        #expect(!reset.useNativeFullscreen)
         #expect(reset.directoryMode == .inherit)
         #expect(!reset.emptyWindowTitle)
         #expect(reset.backgroundColor.redComponent == 0)
@@ -80,7 +84,8 @@ struct PreferencesTests {
         let domain = "Therm2Tests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: domain))
         defer { defaults.removePersistentDomain(forName: domain) }
-        let controller = PreferencesWindowController(preferences: Preferences(defaults: defaults))
+        let preferences = Preferences(defaults: defaults)
+        let controller = PreferencesWindowController(preferences: preferences)
         let content = try #require(controller.window?.contentView)
         content.layoutSubtreeIfNeeded()
         let stack = try #require(content.subviews.first as? NSStackView)
@@ -88,6 +93,16 @@ struct PreferencesTests {
         for view in stack.arrangedSubviews {
             #expect(stack.bounds.contains(view.frame))
         }
+        let checkboxes = stack.arrangedSubviews.compactMap { $0 as? NSStackView }
+            .flatMap(\.arrangedSubviews).compactMap { $0 as? NSButton }
+        let nativeFullscreen = try #require(checkboxes.first { $0.title == "Use native fullscreen" })
+        #expect(nativeFullscreen.state == .off)
+        nativeFullscreen.performClick(nil)
+        #expect(preferences.useNativeFullscreen)
+        #expect(Preferences(defaults: defaults).useNativeFullscreen)
+        preferences.reset()
+        controller.refresh()
+        #expect(nativeFullscreen.state == .off)
         let previewStack = try #require(stack.arrangedSubviews.compactMap { $0 as? NSStackView }
             .first { $0.arrangedSubviews.contains { $0 is PreferencesPreview } })
         let preview = try #require(previewStack.arrangedSubviews.first { $0 is PreferencesPreview })

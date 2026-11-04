@@ -6,7 +6,7 @@ final class TerminalWindow: NSWindow {
 
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
         // The fullscreen backing must cover the menu bar/notch strip as well.
-        if (windowController as? TerminalWindowController)?.isFullscreen == true { return frameRect }
+        if (windowController as? TerminalWindowController)?.isFastFullscreen == true { return frameRect }
         return super.constrainFrameRect(frameRect, to: screen)
     }
 
@@ -39,12 +39,16 @@ final class TerminalWindow: NSWindow {
     override func toggleFullScreen(_ sender: Any?) {
         (windowController as? TerminalWindowController)?.toggleFullscreen()
     }
+
+    func toggleNativeFullscreen() { super.toggleFullScreen(nil) }
 }
 
 final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private(set) var tabs: [TerminalTab] = []
     private(set) var selectedIndex = 0
-    private(set) var isFullscreen = false
+    private(set) var isFastFullscreen = false
+    private(set) var isTransitioningNativeFullscreen = false
+    var isFullscreen: Bool { isFastFullscreen || window?.styleMask.contains(.fullScreen) == true }
     private var savedFrame = NSRect.zero
     private var savedStyle: NSWindow.StyleMask = []
     private let tabBar = TabBar(frame: .zero)
@@ -69,7 +73,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         window.titlebarAppearsTransparent = true
         window.animationBehavior = .none
         window.acceptsMouseMovedEvents = true
-        window.collectionBehavior = [.fullScreenNone, .managed]
+        updateFullscreenBehavior()
         window.contentView = content
         window.center()
         content.addSubview(tabBar)
@@ -139,7 +143,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private func layoutContent() {
         guard let tab = selectedTab else { return }
         let barHeight = tabs.count > 1 ? TabBar.height : 0
-        let safeTop = isFullscreen && !ignoresNotchInFullscreen ? (window?.screen?.safeAreaInsets.top ?? 0) : 0
+        let safeTop = isFastFullscreen && !ignoresNotchInFullscreen ? (window?.screen?.safeAreaInsets.top ?? 0) : 0
         let height = max(0, content.bounds.height - safeTop - barHeight)
         tab.displayedView.frame = NSRect(x: 0, y: barHeight, width: content.bounds.width, height: height)
         tabBar.frame = NSRect(x: 0, y: 0, width: content.bounds.width, height: barHeight)
@@ -148,19 +152,27 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func toggleFullscreen() {
-        guard let window, let screen = window.screen ?? NSScreen.main else { return }
-        if isFullscreen {
-            isFullscreen = false
+        guard !isTransitioningNativeFullscreen, let window = window as? TerminalWindow else { return }
+        // Always leave the active mode, even if the preference changed while fullscreen.
+        if !isFastFullscreen && (isFullscreen || Preferences.shared.useNativeFullscreen) {
+            isTransitioningNativeFullscreen = true
+            window.toggleNativeFullscreen()
+            return
+        }
+        guard let screen = window.screen ?? NSScreen.main else { return }
+        if isFastFullscreen {
+            isFastFullscreen = false
             window.backgroundColor = Preferences.shared.backgroundColor
             window.styleMask = savedStyle
             // If a monitor disappeared, return to a visible part of the current display.
             let frame = NSScreen.screens.contains(where: { $0.visibleFrame.intersects(savedFrame) })
                 ? savedFrame : screen.visibleFrame.insetBy(dx: 60, dy: 60)
             window.setFrame(frame, display: true, animate: false)
+            updateFullscreenBehavior()
         } else {
             savedFrame = window.frame
             savedStyle = window.styleMask
-            isFullscreen = true
+            isFastFullscreen = true
             window.backgroundColor = .black
             window.styleMask = .borderless
             window.setFrame(screen.frame, display: true, animate: false)
@@ -175,11 +187,17 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         Preferences.shared.ignoreNotch.toggle()
     }
 
+    private func updateFullscreenBehavior() {
+        guard !isFullscreen, !isTransitioningNativeFullscreen else { return }
+        window?.collectionBehavior = Preferences.shared.useNativeFullscreen
+            ? [.fullScreenPrimary, .managed] : [.fullScreenNone, .managed]
+    }
+
     func applyPreferences(_ change: Preferences.Change) {
         let preferences = Preferences.shared
         switch change {
         case .background:
-            window?.backgroundColor = isFullscreen ? .black : preferences.backgroundColor
+            window?.backgroundColor = isFastFullscreen ? .black : preferences.backgroundColor
             for pane in tabs.flatMap(\.panes) { pane.nativeBackgroundColor = preferences.backgroundColor }
         case .font:
             for pane in tabs.flatMap(\.panes) { pane.font = preferences.font(size: pane.font.pointSize) }
@@ -197,6 +215,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             }
             tabs.forEach { redraw($0.root) }
         case .notch: layoutContent()
+        case .fullscreen: updateFullscreenBehavior()
         case .title: refreshChrome()
         case .directory: break
         }
@@ -208,13 +227,27 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func screensChanged() {
-        if isFullscreen, let window, let screen = window.screen ?? NSScreen.main {
+        if isFastFullscreen, let window, let screen = window.screen ?? NSScreen.main {
             window.setFrame(screen.frame, display: true, animate: false)
         }
         layoutContent()
     }
 
     func windowDidResize(_ notification: Notification) { layoutContent() }
+    func windowWillEnterFullScreen(_ notification: Notification) { isTransitioningNativeFullscreen = true }
+    func windowWillExitFullScreen(_ notification: Notification) { isTransitioningNativeFullscreen = true }
+    func windowDidEnterFullScreen(_ notification: Notification) { nativeFullscreenTransitionFinished() }
+    func windowDidExitFullScreen(_ notification: Notification) { nativeFullscreenTransitionFinished() }
+    func windowDidFailToEnterFullScreen(_ window: NSWindow) { nativeFullscreenTransitionFinished() }
+    func windowDidFailToExitFullScreen(_ window: NSWindow) { nativeFullscreenTransitionFinished() }
+
+    private func nativeFullscreenTransitionFinished() {
+        isTransitioningNativeFullscreen = false
+        updateFullscreenBehavior()
+        layoutContent()
+        if let pane = selectedTab?.activePane { window?.makeFirstResponder(pane) }
+        (NSApp.delegate as? AppDelegate)?.updatePresentation()
+    }
     func windowDidBecomeKey(_ notification: Notification) {
         (NSApp.delegate as? AppDelegate)?.updatePresentation()
     }

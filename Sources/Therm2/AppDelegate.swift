@@ -27,14 +27,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) { updatePresentation() }
-    func applicationDidResignActive(_ notification: Notification) { NSApp.presentationOptions = [] }
+    func applicationDidResignActive(_ notification: Notification) { updatePresentation() }
 
     func applicationWillTerminate(_ notification: Notification) {
         for controller in windows.values { controller.tabs.forEach { $0.stop() } }
     }
 
     func updatePresentation() {
-        let fullscreen = NSApp.isActive && (NSApp.keyWindow?.windowController as? TerminalWindowController)?.isFullscreen == true
+        // AppKit owns presentation options while a native fullscreen Space is active.
+        let controller = NSApp.keyWindow?.windowController as? TerminalWindowController
+        guard !NSApp.presentationOptions.contains(.fullScreen),
+              controller?.isTransitioningNativeFullscreen != true else { return }
+        let fullscreen = NSApp.isActive && controller?.isFastFullscreen == true
         let options: NSApplication.PresentationOptions = fullscreen
             ? [.autoHideDock, .autoHideMenuBar, .disableMenuBarTransparency] : []
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
@@ -94,6 +98,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(fullscreen(_:)) {
+            item.title = Preferences.shared.useNativeFullscreen ? "Toggle Native Fullscreen" : "Toggle Fast Fullscreen"
+            return current != nil && current?.isTransitioningNativeFullscreen != true
+        }
         if item.action == #selector(alwaysOnTop(_:)) {
             item.state = current?.isAlwaysOnTop == true ? .on : .off
             return current != nil
