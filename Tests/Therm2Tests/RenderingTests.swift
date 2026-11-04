@@ -30,7 +30,7 @@ struct RenderingTests {
         #expect(dim[3] == original[3])
     }
 
-    @Test func focusDimsOnlyRenderedForegroundsAndRestoresCachedColors() throws {
+    @Test func focusDimsTextKeepsBlackBackgroundAndRestoresCachedColors() throws {
         let pane = TerminalPane(directory: NSTemporaryDirectory())
         pane.feed(text: "\u{1b}[31;44mA\u{1b}[38;2;200;120;80;48;2;30;60;90mB\u{1b}[0mC")
         #expect(try components(pane.nativeBackgroundColor) == [0, 0, 0, 1])
@@ -60,6 +60,43 @@ struct RenderingTests {
         for cell in 0..<3 {
             #expect((restored[cell][.foregroundColor] as? NSColor) == (bright[cell][.foregroundColor] as? NSColor))
         }
+    }
+
+    @Test(arguments: [false, true])
+    func focusDarkensColoredBackgroundAndRestoresIt(glassy: Bool) throws {
+        let preferences = Preferences.shared
+        let originalBackground = preferences.backgroundColor
+        let originalGlass = preferences.glassyWindow
+        let originalDimming = preferences.inactiveTextDimming
+        defer {
+            preferences.backgroundColor = originalBackground
+            preferences.glassyWindow = originalGlass
+            preferences.inactiveTextDimming = originalDimming
+        }
+        preferences.backgroundColor = NSColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 1)
+        preferences.glassyWindow = glassy
+        preferences.inactiveTextDimming = 0.3
+        let pane = TerminalPane(directory: NSTemporaryDirectory())
+        let background = pane.nativeBackgroundColor
+        let (_, bright) = try context(pane)
+
+        pane.setFocused(false)
+        try expectDimmed(pane.nativeBackgroundColor, original: background)
+        #expect(pane.backgroundOpacity == (glassy ? 0.18 : 1))
+        let (_, dimmed) = try context(pane)
+        try expectDimmed(dimmed.effectiveBackgroundColor, original: bright.effectiveBackgroundColor)
+        #expect(bright.identity != dimmed.identity)
+        pane.setFocused(false)
+        try expectDimmed(pane.nativeBackgroundColor, original: background)
+
+        pane.setFocused(true)
+        #expect(pane.nativeBackgroundColor == background)
+        let (_, restored) = try context(pane)
+        #expect(restored.effectiveBackgroundColor == bright.effectiveBackgroundColor)
+
+        preferences.inactiveTextDimming = 0
+        pane.setFocused(false)
+        #expect(pane.nativeBackgroundColor == background)
     }
 
     @Test func metalPlainRowsKeepBackgroundsAndMatchShapedTextDimming() throws {

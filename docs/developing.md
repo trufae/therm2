@@ -92,9 +92,9 @@ sizes, divider limits, title sanitation, and local directory handling. It also f
 AppKit wheel events through SwiftTerm and checks horizontal/vertical mouse reports,
 cursor-key fallback, fractional travel, gesture boundaries, modifiers, and scrollback.
 Mouse focus, text-field focus preservation, and accumulated pinch zoom are covered too.
-Renderer checks cover foreground-only dimming, unchanged ANSI backgrounds and selection
-highlights, and restoring colors when focus changes. Preferences persistence and bundled
-font registration are covered. A real PTY test checks directory inheritance without
+Renderer checks cover text and default background dimming, unchanged black and explicit
+ANSI backgrounds and selection highlights, and restoring colors when focus changes.
+Preferences persistence and bundled font registration are covered. A real PTY test checks directory inheritance without
 OSC 7, matching kernel window size, and SIGWINCH delivery when a pane is split.
 Rendering throughput and resident memory still need profiling on representative
 workloads and displays.

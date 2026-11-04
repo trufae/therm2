@@ -55,7 +55,12 @@ final class TerminalPane: LocalProcessTerminalView {
     }
 
     func setFocused(_ focused: Bool) {
-        foregroundBrightness = focused ? 1 : CGFloat(1 - Preferences.shared.inactiveTextDimming)
+        let preferences = Preferences.shared
+        let brightness = focused ? 1 : CGFloat(1 - preferences.inactiveTextDimming)
+        foregroundBrightness = brightness
+        nativeBackgroundColor = preferences.backgroundColor(brightness: brightness)
+            .withAlphaComponent(preferences.terminalBackgroundColor.alphaComponent)
+        layoutView.needsDisplay = true
     }
 
     func setMaximized(_ maximized: Bool) {
@@ -194,7 +199,7 @@ final class TerminalPaneFrame: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Preferences.shared.terminalBackgroundColor.setFill()
+        pane.nativeBackgroundColor.setFill()
         // Paint only the margin: tinting beneath the terminal would apply its alpha twice.
         let margin = NSBezierPath(rect: bounds)
         margin.appendRect(pane.frame)

@@ -245,10 +245,8 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         switch change {
         case .background, .glass:
             updateWindowBackground()
-            for pane in tabs.flatMap(\.panes) {
-                pane.nativeBackgroundColor = preferences.terminalBackgroundColor
-                pane.backgroundOpacity = preferences.terminalBackgroundColor.alphaComponent
-                pane.layoutView.needsDisplay = true
+            for tab in tabs {
+                for pane in tab.panes { pane.setFocused(pane === tab.activePane) }
             }
             layoutContent()
         case .font:

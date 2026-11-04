@@ -31,6 +31,13 @@ final class Preferences {
         backgroundColor.withAlphaComponent(glassyWindow ? 0.18 : 1)
     }
 
+    func backgroundColor(brightness: CGFloat) -> NSColor {
+        guard brightness < 1 else { return backgroundColor }
+        return NSColor(srgbRed: backgroundColor.redComponent * brightness,
+                       green: backgroundColor.greenComponent * brightness,
+                       blue: backgroundColor.blueComponent * brightness, alpha: 1)
+    }
+
     var glassyWindow: Bool {
         didSet {
             guard glassyWindow != oldValue else { return }

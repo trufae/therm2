@@ -29,7 +29,7 @@ final class PreferencesPreview: NSView {
     }
 
     private func drawPane(_ rect: NSRect, lines: [String], brightness: Double) {
-        preferences.backgroundColor.setFill()
+        preferences.backgroundColor(brightness: CGFloat(brightness)).setFill()
         rect.fill()
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }

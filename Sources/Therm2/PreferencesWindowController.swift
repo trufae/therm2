@@ -123,7 +123,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         dimming.target = self
         dimming.action = #selector(dimmingChanged)
         dimming.isContinuous = true
-        dimming.setAccessibilityLabel("Inactive text dimming percentage")
+        dimming.setAccessibilityLabel("Inactive pane dimming percentage")
         dimmingValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         dimmingValue.widthAnchor.constraint(equalToConstant: 34).isActive = true
         let dimmingControls = NSStackView(views: [dimming, dimmingValue])
@@ -137,7 +137,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
             [NSTextField(labelWithString: "Default font size"), sizeControls],
             [NSTextField(labelWithString: "Border margin"), marginControls],
             [NSTextField(labelWithString: "Scrollback history"), historyControls],
-            [NSTextField(labelWithString: "Inactive text dimming"), dimmingControls],
+            [NSTextField(labelWithString: "Inactive pane dimming"), dimmingControls],
             [NSTextField(labelWithString: "New tabs and splits"), directory]
         ])
         grid.rowSpacing = 12
