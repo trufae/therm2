@@ -88,6 +88,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func movePaneToTab(_ sender: NSMenuItem) { current?.moveActivePane(toTabAt: sender.tag) }
     @objc private func cycleTab(_ sender: NSMenuItem) { current?.cycleTab(by: sender.tag) }
     @objc private func cyclePane(_ sender: NSMenuItem) { current?.selectedTab?.cyclePane(by: sender.tag) }
+    @objc private func swapPane(_ sender: NSMenuItem) { current?.selectedTab?.swapPane(by: sender.tag) }
 
     @objc private func resizeSplit(_ sender: NSMenuItem) {
         current?.selectedTab?.resizeSplit(vertical: abs(sender.tag) == 1, by: sender.tag > 0 ? 24 : -24)
@@ -189,8 +190,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.addItem(.separator())
         add(window, "Previous Tab", #selector(cycleTab(_:)), "[", [.command, .shift], tag: -1)
         add(window, "Next Tab", #selector(cycleTab(_:)), "]", [.command, .shift], tag: 1)
-        add(window, "Previous Pane", #selector(cyclePane(_:)), "j", tag: -1)
-        add(window, "Next Pane", #selector(cyclePane(_:)), "k", tag: 1)
+        add(window, "Previous Pane", #selector(cyclePane(_:)), "k", tag: -1)
+        add(window, "Next Pane", #selector(cyclePane(_:)), "j", tag: 1)
+        add(window, "Swap with Previous Pane", #selector(swapPane(_:)), "p", [.command, .shift], tag: -1)
+        add(window, "Swap with Next Pane", #selector(swapPane(_:)), "n", [.command, .shift], tag: 1)
         window.addItem(.separator())
         for number in 1...9 {
             add(window, "Tab \(number)", #selector(selectTab(_:)), "\(number)", tag: number - 1)

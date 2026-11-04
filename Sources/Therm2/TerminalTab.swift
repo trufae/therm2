@@ -123,6 +123,23 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         controller?.layoutChanged(in: self)
     }
 
+    func swapPane(by delta: Int) {
+        let all = panes
+        guard all.count > 1, let index = all.firstIndex(where: { $0 === activePane }) else { return }
+        let other = all[(index + delta + all.count) % all.count]
+        guard other !== activePane else { return }
+        let wasMaximized = isPaneMaximized
+        setPaneMaximized(false)
+        let paneView = activePane.layoutView
+        let otherView = other.layoutView
+        let placeholder = NSView(frame: paneView.frame)
+        replace(paneView, with: placeholder)
+        replace(otherView, with: paneView)
+        replace(placeholder, with: otherView)
+        setPaneMaximized(wasMaximized)
+        controller?.layoutChanged(in: self)
+    }
+
     func togglePaneMaximized() {
         setPaneMaximized(!isPaneMaximized)
         controller?.layoutChanged(in: self)

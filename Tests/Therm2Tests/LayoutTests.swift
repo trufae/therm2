@@ -416,6 +416,91 @@ struct LayoutTests {
         #expect(tab.activePane === second)
     }
 
+    @Test func swappingSiblingPanesKeepsSessionsFocusAndSplitSizes() throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab()
+        let tab = try #require(controller.selectedTab)
+        let first = tab.activePane
+        controller.split(vertical: true)
+        let second = tab.activePane
+        let split = try #require(tab.root as? SplitView)
+        split.setPosition(350, ofDividerAt: 0)
+        let frames = tab.panes.map { $0.layoutView.frame }
+        let pids = [first, second].map { $0.process.shellPid }
+        first.updateTitle("first")
+        second.updateTitle("second")
+        first.feed(text: "preserved output")
+        window.makeFirstResponder(first)
+
+        tab.swapPane(by: 1)
+
+        #expect(tab.panes.elementsEqual([second, first], by: { $0 === $1 }))
+        #expect(tab.activePane === first)
+        #expect(window.firstResponder === first)
+        #expect(tab.root === split)
+        #expect(tab.panes.map { $0.layoutView.frame } == frames)
+        #expect(tab.title == "second · first")
+        #expect([first, second].map { $0.process.shellPid } == pids)
+        #expect(first.process.running && second.process.running)
+        #expect(String(decoding: first.getBufferAsData(), as: UTF8.self).contains("preserved output"))
+        for pane in tab.panes {
+            #expect(pane.tab === tab)
+            #expect(pane.processDelegate === tab)
+        }
+        tab.swapPane(by: -1)
+        #expect(tab.panes.elementsEqual([first, second], by: { $0 === $1 }))
+        #expect(tab.panes.map { $0.layoutView.frame } == frames)
+        #expect(window.firstResponder === first)
+    }
+
+    @Test(arguments: [1, -1], [false, true])
+    func swappingAcrossNestedSplitsWrapsAndPreservesMaximization(direction: Int, maximized: Bool) throws {
+        let tab = tab()
+        let first = tab.activePane
+        let second = try #require(tab.split(vertical: true))
+        let outer = try #require(tab.root as? SplitView)
+        outer.setPosition(350, ofDividerAt: 0)
+        let third = try #require(tab.split(vertical: false))
+        let inner = try #require(second.layoutView.superview as? SplitView)
+        inner.setPosition(200, ofDividerAt: 0)
+        let frames = tab.panes.map { $0.layoutView.frame }
+        let innerFrame = inner.frame
+        tab.focus(first)
+        if maximized { tab.togglePaneMaximized() }
+
+        tab.swapPane(by: direction)
+
+        let expected = direction == 1 ? [second, first, third] : [third, second, first]
+        #expect(tab.panes.elementsEqual(expected, by: { $0 === $1 }))
+        #expect(tab.activePane === first)
+        #expect(tab.isPaneMaximized == maximized)
+        if maximized {
+            #expect(tab.displayedView === first.layoutView)
+            tab.togglePaneMaximized()
+        }
+        #expect(tab.root === outer)
+        #expect(outer.subviews[1] === inner)
+        #expect(inner.frame == innerFrame)
+        #expect(tab.panes.map { $0.layoutView.frame } == frames)
+        // Walking from the moved terminal must now follow the swapped order.
+        tab.cyclePane(by: 1)
+        #expect(tab.activePane === third)
+    }
+
+    @Test func swappingOnlyPaneDoesNothing() {
+        let tab = tab()
+        let pane = tab.activePane
+        let frame = tab.root.frame
+        tab.swapPane(by: 1)
+        tab.swapPane(by: -1)
+        #expect(tab.panes.count == 1)
+        #expect(tab.activePane === pane)
+        #expect(tab.root === pane.layoutView)
+        #expect(tab.root.frame == frame)
+    }
+
     @Test func releasingTabReleasesWholeSplitTree() throws {
         weak var first: TerminalPane?
         weak var second: TerminalPane?

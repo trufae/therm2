@@ -9,7 +9,8 @@
 | ⌘1…9 | Select tab |
 | ⇧⌘1…9 | Move current pane to that tab |
 | ⇧⌘[ / ⇧⌘] | Previous / next tab |
-| ⌘J / ⌘K | Previous / next pane within the current tab |
+| ⌘J / ⌘K | Next / previous pane within the current tab |
+| ⇧⌘N / ⇧⌘P | Swap current pane with next / previous pane |
 | ⇧⌘H / J / K / L | Move nearest divider left / up / down / right |
 | ⌘Enter | Instant fullscreen |
 | ⇧⌘Enter | Maximize current pane / restore splits |
@@ -22,6 +23,10 @@
 ## Mouse and modifiers
 
 Focus follows the mouse between panes in the active window. Drag the thin dividers to resize.
+
+Pane navigation and swapping use the same order within the current tab and wrap at
+both ends. Swapping keeps focus on the current terminal as it moves, preserving running
+sessions and split sizes.
 
 Moving a pane to another existing tab adds it as a left–right split beside that tab's
 active pane and follows it there, preserving its running session. The source tab closes
