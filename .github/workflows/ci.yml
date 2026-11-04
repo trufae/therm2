@@ -1,9 +1,9 @@
-name: CI
+name: ci
 
 on:
   push:
     branches: ['**']
-    tags: ['v*']
+    tags: ['[0-9]*']
   pull_request:
   workflow_dispatch:
 
@@ -38,8 +38,8 @@ jobs:
         run: |
           version=$(./version.sh)
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
-            echo "::error::Tag $GITHUB_REF_NAME does not match app version v$version"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "$version" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match app version $version"
             exit 1
           fi
 
@@ -66,7 +66,7 @@ jobs:
     needs: build-and-test
     if: >-
       github.event_name != 'pull_request' &&
-      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -90,7 +90,7 @@ jobs:
         run: sha256sum --check "Therm2-$APP_VERSION-universal.dmg.sha256"
 
       - name: Publish versioned release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber

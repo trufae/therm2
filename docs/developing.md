@@ -61,8 +61,9 @@ make dmg             # build/Therm2-0.2.0-universal.dmg and .dmg.sha256
 ```
 
 Setting the current version again leaves the build number unchanged. Commit the
-version change, then push a matching tag (for example, `v0.2.0`) to publish a
-versioned GitHub Release. CI rejects tags that disagree with `./version.sh`.
+version change, then push a matching numeric tag (for example, `0.2.0`) to publish a
+versioned GitHub Release. Release tags must start with a digit and match
+`./version.sh` exactly, without a `v` prefix. CI rejects mismatched release tags.
 Every branch push, pull request, and manual CI run tests the app and runs `make dmg`,
 keeping the DMG and checksum as Actions artifacts for 30 days. Successful `main`
 builds update the continuous prerelease. Publishing uses the built-in `GITHUB_TOKEN`.
