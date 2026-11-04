@@ -250,7 +250,7 @@ struct LayoutTests {
         let moved = try #require(source.split(vertical: false))
         let movedView = moved.layoutView
         moved.updateTitle("moving")
-        moved.feed(text: "preserved output")
+        moved.feed(text: "\r\npreserved output\r\n")
         source.togglePaneMaximized()
 
         controller.newTab()
@@ -329,7 +329,8 @@ struct LayoutTests {
         let moved = source.activePane
         let view = moved.layoutView
         let pid = moved.process.shellPid
-        moved.feed(text: "preserved output")
+        // Keep the marker on its own line so a shell prompt cannot overwrite it.
+        moved.feed(text: "\r\npreserved output\r\n")
         #expect(moved.process.running)
 
         controller.moveActivePane(toTabAt: destinationIndex)
@@ -476,7 +477,8 @@ struct LayoutTests {
         let pids = [first, second].map { $0.process.shellPid }
         first.updateTitle("first")
         second.updateTitle("second")
-        first.feed(text: "preserved output")
+        // The login shell may print its first prompt while this test is running.
+        first.feed(text: "\r\npreserved output\r\n")
         window.makeFirstResponder(first)
 
         tab.swapPane(by: 1)

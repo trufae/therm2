@@ -9,11 +9,15 @@ struct ProcessTests {
 
     private func waitFor(_ text: String, in pane: TerminalPane) async throws {
         let deadline = ContinuousClock.now + .seconds(5)
-        while ContinuousClock.now < deadline {
-            if String(decoding: pane.getBufferAsData(), as: UTF8.self).contains(text) { return }
+        while !String(decoding: pane.getBufferAsData(), as: UTF8.self).contains(text) {
+            // Check the buffer first: the main actor can resume after the deadline
+            // even though the background PTY reader delivered the output in time.
+            guard ContinuousClock.now < deadline else {
+                Issue.record("PTY did not produce \(text)")
+                return
+            }
             try await Task.sleep(for: .milliseconds(20))
         }
-        Issue.record("PTY did not produce \(text)")
     }
 
     @Test func splitInheritsActualShellDirectoryAndNotifiesItsProcessOfResize() async throws {

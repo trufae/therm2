@@ -17,7 +17,8 @@ defaults:
 jobs:
   build-and-test:
     name: Build, test and package
-    runs-on: macos-26
+    # Avoid ARM runner capacity failures; packaging builds both architectures.
+    runs-on: macos-26-intel
     timeout-minutes: 30
     outputs:
       version: ${{ steps.version.outputs.version }}
