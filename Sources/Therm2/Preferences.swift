@@ -32,10 +32,10 @@ final class Preferences {
     }
 
     func backgroundColor(brightness: CGFloat) -> NSColor {
-        guard brightness < 1 else { return backgroundColor }
-        return NSColor(srgbRed: backgroundColor.redComponent * brightness,
-                       green: backgroundColor.greenComponent * brightness,
-                       blue: backgroundColor.blueComponent * brightness, alpha: 1)
+        guard brightness < 1, let color = backgroundColor.usingColorSpace(.sRGB) else { return backgroundColor }
+        return NSColor(srgbRed: color.redComponent * brightness,
+                       green: color.greenComponent * brightness,
+                       blue: color.blueComponent * brightness, alpha: 1)
     }
 
     var glassyWindow: Bool {

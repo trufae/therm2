@@ -62,6 +62,21 @@ struct PreferencesTests {
         #expect(reset.backgroundColor.redComponent == 0)
     }
 
+    @Test(arguments: [false, true])
+    func defaultBackgroundCanBeDimmed(invalidStoredColor: Bool) throws {
+        let domain = "Therm2Tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        if invalidStoredColor { defaults.set([1, 2], forKey: "backgroundColor") }
+        let preferences = Preferences(defaults: defaults)
+        #expect(preferences.backgroundColor(brightness: 1) == preferences.backgroundColor)
+        let dimmed = try #require(preferences.backgroundColor(brightness: 0.7).usingColorSpace(.sRGB))
+        #expect(dimmed.redComponent == 0)
+        #expect(dimmed.greenComponent == 0)
+        #expect(dimmed.blueComponent == 0)
+        #expect(dimmed.alphaComponent == 1)
+    }
+
     @Test func defaultFontSizeRejectsInvalidValuesAndUsesZoomBounds() throws {
         let domain = "Therm2Tests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: domain))
