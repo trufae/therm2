@@ -13,6 +13,7 @@ final class TerminalPane: LocalProcessTerminalView {
     private(set) var started = false
     private var pinchFontSize: CGFloat?
     private var maximizedMarker: MaximizedPaneMarker?
+    var layoutView: NSView { superview as? TerminalPaneFrame ?? self }
 
     var newSessionDirectory: String {
         guard Preferences.shared.directoryMode == .inherit else { return NSHomeDirectory() }
@@ -156,6 +157,50 @@ final class TerminalPane: LocalProcessTerminalView {
         title = "Launch failed"
         feed(text: "\r\nCould not start \(Self.shell): \(error)\r\nPress ⌘W to close this pane.\r\n")
         tab?.controller?.refreshChrome()
+    }
+}
+
+/// Insets the terminal itself so drawing, hit testing, and PTY sizing share the same geometry.
+final class TerminalPaneFrame: NSView {
+    let pane: TerminalPane
+
+    init(pane: TerminalPane) {
+        self.pane = pane
+        super.init(frame: pane.frame)
+        autoresizingMask = [.width, .height]
+        addSubview(pane)
+        updateMargin()
+    }
+
+    required init?(coder: NSCoder) { fatalError("Use init(pane:)") }
+    override var isOpaque: Bool { true }
+
+    override var frame: NSRect {
+        didSet { updateMargin() }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateMargin()
+    }
+
+    func updateMargin() {
+        let margin = Preferences.shared.borderMargin
+        let horizontal = min(margin, max(0, (bounds.width - 1) / 2))
+        let vertical = min(margin, max(0, (bounds.height - 1) / 2))
+        let rect = bounds.insetBy(dx: horizontal, dy: vertical)
+        if pane.frame != rect { pane.frame = rect }
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        Preferences.shared.backgroundColor.setFill()
+        bounds.fill()
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let hit = super.hitTest(point)
+        return hit === self ? pane : hit
     }
 }
 

@@ -7,6 +7,8 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let fontFamily = NSPopUpButton()
     private let fontSize = NSTextField(string: "13")
     private let fontSizeStepper = NSStepper()
+    private let borderMargin = NSTextField(string: "0")
+    private let borderMarginStepper = NSStepper()
     private let directory = NSPopUpButton()
     private let dimming = NSSlider(value: 45, minValue: 0, maxValue: 75, target: nil, action: nil)
     private let dimmingValue = NSTextField(labelWithString: "30%")
@@ -69,6 +71,28 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         let sizeControls = NSStackView(views: [fontSize, fontSizeStepper, NSTextField(labelWithString: "pt · ⌘0")])
         sizeControls.spacing = 6
 
+        let marginFormatter = NumberFormatter()
+        marginFormatter.numberStyle = .decimal
+        marginFormatter.allowsFloats = false
+        marginFormatter.minimum = 0
+        marginFormatter.maximum = NSNumber(value: Double(Preferences.maximumBorderMargin))
+        borderMargin.formatter = marginFormatter
+        borderMargin.alignment = .right
+        borderMargin.delegate = self
+        borderMargin.target = self
+        borderMargin.action = #selector(borderMarginChanged)
+        borderMargin.setAccessibilityLabel("Border margin in points")
+        borderMargin.toolTip = "Space between each terminal pane's edges and its text."
+        borderMargin.widthAnchor.constraint(equalToConstant: 58).isActive = true
+        borderMarginStepper.minValue = 0
+        borderMarginStepper.maxValue = Double(Preferences.maximumBorderMargin)
+        borderMarginStepper.increment = 1
+        borderMarginStepper.target = self
+        borderMarginStepper.action = #selector(borderMarginStepped)
+        borderMarginStepper.setAccessibilityLabel("Adjust border margin")
+        let marginControls = NSStackView(views: [borderMargin, borderMarginStepper, NSTextField(labelWithString: "pt")])
+        marginControls.spacing = 6
+
         directory.addItems(withTitles: ["Active terminal's directory", "Home directory"])
         directory.target = self
         directory.action = #selector(directoryChanged)
@@ -88,6 +112,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
             [NSTextField(labelWithString: "Accent"), accent],
             [NSTextField(labelWithString: "Font family"), fontFamily],
             [NSTextField(labelWithString: "Default font size"), sizeControls],
+            [NSTextField(labelWithString: "Border margin"), marginControls],
             [NSTextField(labelWithString: "Inactive text dimming"), dimmingControls],
             [NSTextField(labelWithString: "New tabs and splits"), directory]
         ])
@@ -152,6 +177,8 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         fontFamily.selectItem(at: index)
         fontSize.integerValue = Int(preferences.defaultFontSize)
         fontSizeStepper.doubleValue = Double(preferences.defaultFontSize)
+        borderMargin.integerValue = Int(preferences.borderMargin)
+        borderMarginStepper.doubleValue = Double(preferences.borderMargin)
         directory.selectItem(at: preferences.directoryMode == .inherit ? 0 : 1)
         dimming.doubleValue = dimming.maxValue - preferences.inactiveTextDimming * 100
         dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
@@ -182,6 +209,15 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     }
     func controlTextDidEndEditing(_ notification: Notification) {
         if notification.object as? NSTextField === fontSize { fontSizeChanged() }
+        if notification.object as? NSTextField === borderMargin { borderMarginChanged() }
+    }
+    @objc private func borderMarginChanged() {
+        preferences.borderMargin = CGFloat(borderMargin.doubleValue)
+        refresh()
+    }
+    @objc private func borderMarginStepped() {
+        preferences.borderMargin = CGFloat(borderMarginStepper.doubleValue)
+        refresh()
     }
     @objc private func directoryChanged() { preferences.directoryMode = directory.indexOfSelectedItem == 0 ? .inherit : .home }
     @objc private func dimmingChanged() {

@@ -13,7 +13,7 @@ A small, native macOS terminal. No web view, no telemetry, no clutter.
 - Opaque dark background, steady cursor, no blur or animation
 - Focus follows the mouse, inactive panes dim
 - Find, copy/paste, ⌘+/⌘− to zoom
-- Native preferences: colors, font, dimming, start directory
+- Native preferences: colors, font, border margin, dimming, start directory
 - Bundled retro fonts, registered for this app only
 - New tabs and splits inherit the active shell's directory
 

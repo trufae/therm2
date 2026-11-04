@@ -3,8 +3,9 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, accent, font, fontSize, dimming, notch, fullscreen, directory, title }
+    enum Change { case background, accent, font, fontSize, margin, dimming, notch, fullscreen, directory, title }
     enum DirectoryMode: String { case inherit, home }
+    static let maximumBorderMargin: CGFloat = 100
     private let defaults: UserDefaults
     var onChange: ((Change) -> Void)?
 
@@ -47,6 +48,15 @@ final class Preferences {
             onChange?(.dimming)
         }
     }
+    var borderMargin: CGFloat {
+        didSet {
+            borderMargin = borderMargin.isFinite
+                ? min(Self.maximumBorderMargin, max(0, borderMargin.rounded())) : oldValue
+            guard borderMargin != oldValue else { return }
+            defaults.set(Double(borderMargin), forKey: "borderMargin")
+            onChange?(.margin)
+        }
+    }
     var ignoreNotch: Bool {
         didSet {
             guard ignoreNotch != oldValue else { return }
@@ -86,6 +96,9 @@ final class Preferences {
             ? CGFloat(size.rounded()) : 13
         let dimming = defaults.object(forKey: "inactiveTextDimming") as? Double ?? 0.3
         inactiveTextDimming = dimming.isFinite && (0...0.75).contains(dimming) ? dimming : 0.3
+        let margin = defaults.object(forKey: "borderMargin") as? Double ?? 0
+        borderMargin = margin.isFinite && (0...Double(Self.maximumBorderMargin)).contains(margin)
+            ? CGFloat(margin.rounded()) : 0
         ignoreNotch = defaults.bool(forKey: "ignoreNotch")
         useNativeFullscreen = defaults.bool(forKey: "useNativeFullscreen")
         directoryMode = DirectoryMode(rawValue: defaults.string(forKey: "directoryMode") ?? "") ?? .inherit
@@ -105,6 +118,7 @@ final class Preferences {
         fontFamily = nil
         defaultFontSize = 13
         inactiveTextDimming = 0.3
+        borderMargin = 0
         ignoreNotch = false
         useNativeFullscreen = false
         directoryMode = .inherit

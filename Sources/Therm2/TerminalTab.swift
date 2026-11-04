@@ -17,11 +17,11 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     var title: String { panes.map(\.title).filter { !$0.isEmpty }.joined(separator: " · ") }
     private var maximizedPlaceholder: PanePlaceholder?
     var isPaneMaximized: Bool { maximizedPlaceholder != nil }
-    var displayedView: NSView { maximizedPlaceholder?.pane ?? root }
+    var displayedView: NSView { maximizedPlaceholder?.paneView ?? root }
 
     init(directory: String) {
         let pane = TerminalPane(directory: directory)
-        root = pane
+        root = TerminalPaneFrame(pane: pane)
         activePane = pane
         pane.tab = self
         pane.processDelegate = self
@@ -38,8 +38,9 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         let wasMaximized = isPaneMaximized
         setPaneMaximized(false)
         let old = activePane
-        let minimum = SplitView.minimumSize(of: old)
-        let available = vertical ? old.bounds.width : old.bounds.height
+        let oldView = old.layoutView
+        let minimum = SplitView.minimumSize(of: oldView)
+        let available = vertical ? oldView.bounds.width : oldView.bounds.height
         guard available >= (vertical ? minimum.width : minimum.height) * 2 + 1 else {
             setPaneMaximized(wasMaximized)
             controller?.layoutChanged(in: self)
@@ -48,11 +49,12 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         let pane = TerminalPane(directory: old.newSessionDirectory)
         pane.tab = self
         pane.processDelegate = self
-        let split = SplitView(frame: old.frame)
+        let paneView = TerminalPaneFrame(pane: pane)
+        let split = SplitView(frame: oldView.frame)
         split.isVertical = vertical
-        replace(old, with: split)
-        split.addSubview(old)
-        split.addSubview(pane)
+        replace(oldView, with: split)
+        split.addSubview(oldView)
+        split.addSubview(paneView)
         split.adjustSubviews()
         split.setPosition((available - split.dividerThickness) / 2, ofDividerAt: 0)
         activePane = pane
@@ -64,14 +66,15 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         guard panes.contains(where: { $0 === pane }) else { return }
         let wasMaximized = isPaneMaximized
         setPaneMaximized(false)
-        guard let parent = pane.superview as? SplitView else {
+        let paneView = pane.layoutView
+        guard let parent = paneView.superview as? SplitView else {
             controller?.closeTab(self)
             return
         }
-        let sibling = parent.subviews.first { $0 !== pane }!
+        let sibling = parent.subviews.first { $0 !== paneView }!
         if activePane === pane { activePane = Self.panes(in: sibling)[0] }
         pane.stop()
-        pane.removeFromSuperview()
+        paneView.removeFromSuperview()
         sibling.removeFromSuperview()
         replace(parent, with: sibling)
         setPaneMaximized(wasMaximized)
@@ -101,17 +104,19 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     private func setPaneMaximized(_ maximized: Bool) {
         if !maximized, let placeholder = maximizedPlaceholder {
             let pane = placeholder.pane
+            let paneView = pane.layoutView
             pane.setMaximized(false)
-            pane.removeFromSuperview()
-            pane.frame = placeholder.frame
-            placeholder.superview?.replaceSubview(placeholder, with: pane)
+            paneView.removeFromSuperview()
+            paneView.frame = placeholder.frame
+            placeholder.superview?.replaceSubview(placeholder, with: paneView)
             maximizedPlaceholder = nil
-        } else if maximized, maximizedPlaceholder == nil, let parent = activePane.superview as? SplitView {
+        } else if maximized, maximizedPlaceholder == nil, let parent = activePane.layoutView.superview as? SplitView {
+            let paneView = activePane.layoutView
             let placeholder = PanePlaceholder(pane: activePane)
-            parent.replaceSubview(activePane, with: placeholder)
+            parent.replaceSubview(paneView, with: placeholder)
             root.removeFromSuperview()
             maximizedPlaceholder = placeholder
-            activePane.frame = root.bounds
+            paneView.frame = root.bounds
             activePane.setMaximized(true)
         }
     }
@@ -119,7 +124,7 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     /// Move the nearest divider on the requested axis, preserving all other ratios.
     func resizeSplit(vertical: Bool, by delta: CGFloat) {
         guard !isPaneMaximized else { return }
-        var child: NSView = activePane
+        var child: NSView = activePane.layoutView
         while let parent = child.superview as? SplitView {
             if parent.isVertical == vertical {
                 let first = parent.subviews[0]
@@ -149,6 +154,7 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
 
     private static func panes(in view: NSView) -> [TerminalPane] {
         if let pane = view as? TerminalPane { return [pane] }
+        if let frame = view as? TerminalPaneFrame { return [frame.pane] }
         if let placeholder = view as? PanePlaceholder { return [placeholder.pane] }
         return view.subviews.flatMap { panes(in: $0) }
     }
@@ -175,10 +181,12 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
 /// Retains the original leaf position and frame while its terminal fills the tab.
 private final class PanePlaceholder: NSView {
     let pane: TerminalPane
+    let paneView: NSView
 
     init(pane: TerminalPane) {
         self.pane = pane
-        super.init(frame: pane.frame)
+        paneView = pane.layoutView
+        super.init(frame: paneView.frame)
         autoresizingMask = [.width, .height]
     }
 
@@ -199,7 +207,10 @@ final class SplitView: NSSplitView, NSSplitViewDelegate {
     required init?(coder: NSCoder) { fatalError("Use init(frame:)") }
 
     static func minimumSize(of view: NSView) -> NSSize {
-        guard let split = view as? SplitView else { return NSSize(width: 160, height: 90) }
+        guard let split = view as? SplitView else {
+            let margin = Preferences.shared.borderMargin * 2
+            return NSSize(width: 160 + margin, height: 90 + margin)
+        }
         let sizes = split.subviews.map { minimumSize(of: $0) }
         if split.isVertical {
             return NSSize(width: sizes.reduce(1) { $0 + $1.width }, height: sizes.map(\.height).max() ?? 90)

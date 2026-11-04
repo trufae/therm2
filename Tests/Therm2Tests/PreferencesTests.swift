@@ -12,10 +12,12 @@ struct PreferencesTests {
         defer { defaults.removePersistentDomain(forName: domain) }
         let preferences = Preferences(defaults: defaults)
         #expect(!preferences.useNativeFullscreen)
+        #expect(preferences.borderMargin == 0)
         preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 0.2)
         preferences.accentColor = .red
         preferences.fontFamily = "Menlo"
         preferences.defaultFontSize = 18
+        preferences.borderMargin = 12
         preferences.inactiveTextDimming = 0.5
         preferences.ignoreNotch = true
         preferences.useNativeFullscreen = true
@@ -27,6 +29,7 @@ struct PreferencesTests {
         #expect(loaded.accentColor.redComponent > 0.99)
         #expect(loaded.fontFamily == "Menlo")
         #expect(loaded.defaultFontSize == 18)
+        #expect(loaded.borderMargin == 12)
         #expect(loaded.font(size: 24).pointSize == 24)
         #expect(loaded.inactiveTextDimming == 0.5)
         #expect(loaded.ignoreNotch)
@@ -37,6 +40,7 @@ struct PreferencesTests {
         let reset = Preferences(defaults: defaults)
         #expect(reset.fontFamily == nil)
         #expect(reset.defaultFontSize == 13)
+        #expect(reset.borderMargin == 0)
         #expect(reset.inactiveTextDimming == 0.3)
         #expect(!reset.ignoreNotch)
         #expect(!reset.useNativeFullscreen)
@@ -66,6 +70,28 @@ struct PreferencesTests {
         preferences.defaultFontSize = -1
         #expect(preferences.defaultFontSize == TerminalPane.minimumFontSize)
         #expect(Preferences(defaults: defaults).defaultFontSize == TerminalPane.minimumFontSize)
+    }
+
+    @Test func borderMarginRejectsInvalidValuesAndNotifiesChanges() throws {
+        let domain = "Therm2Tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        for invalid in [-1.0, 101, Double.infinity, Double.nan] {
+            defaults.set(invalid, forKey: "borderMargin")
+            #expect(Preferences(defaults: defaults).borderMargin == 0)
+        }
+        let preferences = Preferences(defaults: defaults)
+        var changes = 0
+        preferences.onChange = { if case .margin = $0 { changes += 1 } }
+        preferences.borderMargin = 12.6
+        #expect(preferences.borderMargin == 13)
+        preferences.borderMargin = .nan
+        #expect(preferences.borderMargin == 13)
+        #expect(changes == 1)
+        preferences.borderMargin = 1_000
+        #expect(preferences.borderMargin == Preferences.maximumBorderMargin)
+        preferences.borderMargin = -1
+        #expect(preferences.borderMargin == 0)
     }
 
     @Test func newPanesAndFontResetUseTheSavedDefaultSize() {

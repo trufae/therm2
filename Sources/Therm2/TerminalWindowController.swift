@@ -198,11 +198,17 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         switch change {
         case .background:
             window?.backgroundColor = isFastFullscreen ? .black : preferences.backgroundColor
-            for pane in tabs.flatMap(\.panes) { pane.nativeBackgroundColor = preferences.backgroundColor }
+            for pane in tabs.flatMap(\.panes) {
+                pane.nativeBackgroundColor = preferences.backgroundColor
+                pane.layoutView.needsDisplay = true
+            }
         case .font:
             for pane in tabs.flatMap(\.panes) { pane.font = preferences.font(size: pane.font.pointSize) }
         case .fontSize:
             for pane in tabs.flatMap(\.panes) { pane.setFontSize(preferences.defaultFontSize) }
+        case .margin:
+            for pane in tabs.flatMap(\.panes) { (pane.layoutView as? TerminalPaneFrame)?.updateMargin() }
+            layoutContent()
         case .dimming:
             for tab in tabs {
                 for pane in tab.panes { pane.setFocused(pane === tab.activePane) }

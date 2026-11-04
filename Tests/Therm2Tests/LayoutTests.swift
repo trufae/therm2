@@ -83,17 +83,17 @@ struct LayoutTests {
         let topRight = try #require(tab.split(vertical: false))
         #expect(tab.panes.count == 3)
         #expect((tab.root as? SplitView)?.isVertical == true)
-        #expect((topRight.superview as? SplitView)?.isVertical == false)
+        #expect((topRight.layoutView.superview as? SplitView)?.isVertical == false)
         #expect(tab.panes[0] === original)
         #expect(right.directory == NSTemporaryDirectory())
 
         tab.close(right)
         #expect(tab.panes.count == 2)
         #expect(tab.activePane === topRight)
-        #expect(topRight.superview === tab.root)
+        #expect(topRight.layoutView.superview === tab.root)
 
         tab.close(topRight)
-        #expect(tab.root === original)
+        #expect(tab.root === original.layoutView)
         #expect(tab.activePane === original)
         #expect(tab.panes.count == 1)
         #expect(original.bounds.size == NSSize(width: 960, height: 600))
@@ -107,7 +107,7 @@ struct LayoutTests {
             let right = try #require(tab.split(vertical: true))
             tab.close(try #require(removed))
             #expect(tab.activePane === right)
-            #expect(tab.root === right)
+            #expect(tab.root === right.layoutView)
         }
         #expect(removed == nil)
     }
@@ -123,7 +123,38 @@ struct LayoutTests {
         tab.close(right)
         #expect(tab.root === outer)
         #expect(left.frame.width == width)
-        #expect(outer.subviews[1] === upperRight)
+        #expect(outer.subviews[1] === upperRight.layoutView)
+    }
+
+    @Test func borderMarginInsetsSplitPanesAndSurvivesMaximizationAndResize() throws {
+        let preferences = Preferences.shared
+        let original = preferences.borderMargin
+        preferences.borderMargin = 12
+        defer { preferences.borderMargin = original }
+        let tab = tab()
+        let first = tab.activePane
+        let second = try #require(tab.split(vertical: true))
+        let third = try #require(tab.split(vertical: false))
+
+        func expectMargins() {
+            for pane in tab.panes {
+                #expect(pane.frame == pane.layoutView.bounds.insetBy(dx: 12, dy: 12))
+            }
+        }
+        expectMargins()
+        tab.root.frame.size = NSSize(width: 1_200, height: 800)
+        expectMargins()
+        let frames = tab.panes.map { $0.layoutView.frame }
+        tab.togglePaneMaximized()
+        #expect(third.frame == tab.displayedView.bounds.insetBy(dx: 12, dy: 12))
+        tab.togglePaneMaximized()
+        #expect(tab.panes.map { $0.layoutView.frame } == frames)
+        expectMargins()
+        tab.close(second)
+        tab.close(third)
+        #expect(tab.root === first.layoutView)
+        #expect(first.frame == tab.root.bounds.insetBy(dx: 12, dy: 12))
+        #expect(SplitView.minimumSize(of: tab.root) == NSSize(width: 184, height: 114))
     }
 
     @Test func panesCannotBeSplitBelowMinimumSize() {
@@ -303,8 +334,8 @@ struct LayoutTests {
         let frames = tab.panes.map(\.frame)
         tab.togglePaneMaximized()
         #expect(tab.isPaneMaximized)
-        #expect(tab.displayedView === third)
-        #expect(third.frame == outer.bounds)
+        #expect(tab.displayedView === third.layoutView)
+        #expect(third.layoutView.frame == outer.bounds)
         #expect(tab.panes.elementsEqual([first, second, third], by: { $0 === $1 }))
         tab.togglePaneMaximized()
         #expect(!tab.isPaneMaximized)
@@ -319,15 +350,15 @@ struct LayoutTests {
         let third = try #require(tab.split(vertical: false))
         tab.togglePaneMaximized()
         tab.cyclePane(by: 1)
-        #expect(tab.displayedView === first)
+        #expect(tab.displayedView === first.layoutView)
         #expect(tab.isPaneMaximized)
         // A background process exiting must not discard the maximized state.
         tab.close(second)
         #expect(tab.isPaneMaximized)
-        #expect(tab.displayedView === first)
+        #expect(tab.displayedView === first.layoutView)
         tab.close(first)
         #expect(tab.activePane === third)
-        #expect(tab.root === third)
+        #expect(tab.root === third.layoutView)
         #expect(!tab.isPaneMaximized)
         #expect(tab.panes.count == 1)
     }

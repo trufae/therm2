@@ -33,7 +33,10 @@ final class PreferencesPreview: NSView {
         rect.fill()
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
-        NSBezierPath(rect: rect).addClip()
+        let margin = preferences.borderMargin
+        let textRect = rect.insetBy(dx: margin, dy: margin)
+        guard textRect.width > 0, textRect.height > 0 else { return }
+        NSBezierPath(rect: textRect).addClip()
         let font = preferences.font(size: preferences.defaultFontSize)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -41,7 +44,7 @@ final class PreferencesPreview: NSView {
         ]
         let lineHeight = ceil(font.ascender - font.descender + font.leading)
         for (index, line) in lines.enumerated() {
-            (line as NSString).draw(at: NSPoint(x: rect.minX + 10, y: rect.minY + 10 + CGFloat(index) * lineHeight),
+            (line as NSString).draw(at: NSPoint(x: textRect.minX, y: textRect.minY + CGFloat(index) * lineHeight),
                                    withAttributes: attributes)
         }
     }
