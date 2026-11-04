@@ -15,6 +15,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let notch = NSButton(checkboxWithTitle: "Ignore notch in fullscreen", target: nil, action: nil)
     private let nativeFullscreen = NSButton(checkboxWithTitle: "Use native fullscreen", target: nil, action: nil)
     private let emptyTitle = NSButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
+    private let glassyWindow = NSButton(checkboxWithTitle: "Glassy window", target: nil, action: nil)
     private let preview: PreferencesPreview
 
     init(preferences: Preferences = .shared) {
@@ -128,7 +129,10 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         nativeFullscreen.toolTip = "Use a macOS fullscreen Space. Uncheck for instant fullscreen. Applies the next time you enter fullscreen."
         emptyTitle.target = self
         emptyTitle.action = #selector(emptyTitleChanged)
-        let checkboxes = NSStackView(views: [nativeFullscreen, notch, emptyTitle])
+        glassyWindow.target = self
+        glassyWindow.action = #selector(glassyWindowChanged)
+        glassyWindow.toolTip = "Translucent glass behind terminal text. Uses Liquid Glass on macOS 26 or later."
+        let checkboxes = NSStackView(views: [glassyWindow, nativeFullscreen, notch, emptyTitle])
         checkboxes.orientation = .vertical
         checkboxes.alignment = .leading
         checkboxes.spacing = 8
@@ -185,6 +189,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         notch.state = preferences.ignoreNotch ? .on : .off
         nativeFullscreen.state = preferences.useNativeFullscreen ? .on : .off
         emptyTitle.state = preferences.emptyWindowTitle ? .on : .off
+        glassyWindow.state = preferences.glassyWindow ? .on : .off
         preview.needsDisplay = true
     }
 
@@ -228,5 +233,6 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     @objc private func notchChanged() { preferences.ignoreNotch = notch.state == .on }
     @objc private func nativeFullscreenChanged() { preferences.useNativeFullscreen = nativeFullscreen.state == .on }
     @objc private func emptyTitleChanged() { preferences.emptyWindowTitle = emptyTitle.state == .on }
+    @objc private func glassyWindowChanged() { preferences.glassyWindow = glassyWindow.state == .on }
     @objc private func resetPreferences() { preferences.reset(); refresh() }
 }

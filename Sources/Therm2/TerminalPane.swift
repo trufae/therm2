@@ -31,7 +31,7 @@ final class TerminalPane: LocalProcessTerminalView {
         options.enableSixelReported = false
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 500),
                    font: Preferences.shared.font(size: Self.defaultFontSize), options: options)
-        nativeBackgroundColor = Preferences.shared.backgroundColor
+        nativeBackgroundColor = Preferences.shared.terminalBackgroundColor
         nativeForegroundColor = NSColor(white: 0.86, alpha: 1)
         caretColor = NSColor(white: 0.86, alpha: 1)
         selectedTextBackgroundColor = NSColor(srgbRed: 0.22, green: 0.29, blue: 0.38, alpha: 1)
@@ -173,7 +173,7 @@ final class TerminalPaneFrame: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(pane:)") }
-    override var isOpaque: Bool { true }
+    override var isOpaque: Bool { !Preferences.shared.glassyWindow }
 
     override var frame: NSRect {
         didSet { updateMargin() }
@@ -194,8 +194,12 @@ final class TerminalPaneFrame: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Preferences.shared.backgroundColor.setFill()
-        bounds.fill()
+        Preferences.shared.terminalBackgroundColor.setFill()
+        // Paint only the margin: tinting beneath the terminal would apply its alpha twice.
+        let margin = NSBezierPath(rect: bounds)
+        margin.appendRect(pane.frame)
+        margin.windingRule = .evenOdd
+        margin.fill()
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {

@@ -53,6 +53,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private var savedStyle: NSWindow.StyleMask = []
     private let tabBar = TabBar(frame: .zero)
     private let content = NSView()
+    private var glassView: NSView?
     var onClose: (() -> Void)?
     var selectedTab: TerminalTab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
     var isAlwaysOnTop: Bool { window?.level == .floating }
@@ -75,6 +76,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         window.acceptsMouseMovedEvents = true
         updateFullscreenBehavior()
         window.contentView = content
+        updateWindowBackground()
         window.center()
         content.addSubview(tabBar)
         tabBar.onSelect = { [weak self] index in self?.selectTab(at: index) }
@@ -141,6 +143,9 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     private func layoutContent() {
+        if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
+            glass.cornerRadius = isFullscreen ? 0 : 12
+        }
         guard let tab = selectedTab else { return }
         let barHeight = tabs.count > 1 ? TabBar.height : 0
         let safeTop = isFastFullscreen && !ignoresNotchInFullscreen ? (window?.screen?.safeAreaInsets.top ?? 0) : 0
@@ -162,7 +167,6 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         guard let screen = window.screen ?? NSScreen.main else { return }
         if isFastFullscreen {
             isFastFullscreen = false
-            window.backgroundColor = Preferences.shared.backgroundColor
             window.styleMask = savedStyle
             // If a monitor disappeared, return to a visible part of the current display.
             let frame = NSScreen.screens.contains(where: { $0.visibleFrame.intersects(savedFrame) })
@@ -173,10 +177,10 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             savedFrame = window.frame
             savedStyle = window.styleMask
             isFastFullscreen = true
-            window.backgroundColor = .black
             window.styleMask = .borderless
             window.setFrame(screen.frame, display: true, animate: false)
         }
+        updateWindowBackground()
         window.makeKeyAndOrderFront(nil)
         layoutContent()
         if let pane = selectedTab?.activePane { window.makeFirstResponder(pane) }
@@ -193,15 +197,60 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             ? [.fullScreenPrimary, .managed] : [.fullScreenNone, .managed]
     }
 
+    private func updateWindowBackground() {
+        guard let window else { return }
+        let preferences = Preferences.shared
+        let glassy = preferences.glassyWindow
+        let responder = window.firstResponder
+        window.isOpaque = !glassy
+        window.backgroundColor = glassy ? .clear : (isFastFullscreen ? .black : preferences.backgroundColor)
+        window.hasShadow = glassy && !isFullscreen
+
+        if glassy, glassView == nil {
+            let effect: NSView
+            if #available(macOS 26.0, *) {
+                let glass = NSGlassEffectView(frame: content.frame)
+                glass.style = .clear
+                glass.cornerRadius = isFullscreen ? 0 : 12
+                effect = glass
+                window.contentView = glass
+                glass.contentView = content
+            } else {
+                let blur = NSVisualEffectView(frame: content.frame)
+                blur.material = .hudWindow
+                blur.blendingMode = .behindWindow
+                blur.state = .active
+                effect = blur
+                window.contentView = blur
+                blur.addSubview(content)
+            }
+            glassView = effect
+            content.frame = effect.bounds
+            content.autoresizingMask = [.width, .height]
+        } else if !glassy, let effect = glassView {
+            if #available(macOS 26.0, *), let glass = effect as? NSGlassEffectView {
+                glass.contentView = nil
+            } else {
+                content.removeFromSuperview()
+            }
+            window.contentView = content
+            glassView = nil
+        }
+        if window.firstResponder !== responder { window.makeFirstResponder(responder) }
+        tabBar.needsDisplay = true
+    }
+
     func applyPreferences(_ change: Preferences.Change) {
         let preferences = Preferences.shared
         switch change {
-        case .background:
-            window?.backgroundColor = isFastFullscreen ? .black : preferences.backgroundColor
+        case .background, .glass:
+            updateWindowBackground()
             for pane in tabs.flatMap(\.panes) {
-                pane.nativeBackgroundColor = preferences.backgroundColor
+                pane.nativeBackgroundColor = preferences.terminalBackgroundColor
+                pane.backgroundOpacity = preferences.terminalBackgroundColor.alphaComponent
                 pane.layoutView.needsDisplay = true
             }
+            layoutContent()
         case .font:
             for pane in tabs.flatMap(\.panes) { pane.font = preferences.font(size: pane.font.pointSize) }
         case .fontSize:
@@ -251,6 +300,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private func nativeFullscreenTransitionFinished() {
         isTransitioningNativeFullscreen = false
         updateFullscreenBehavior()
+        updateWindowBackground()
         layoutContent()
         if let pane = selectedTab?.activePane { window?.makeFirstResponder(pane) }
         (NSApp.delegate as? AppDelegate)?.updatePresentation()

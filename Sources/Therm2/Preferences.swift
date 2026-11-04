@@ -3,11 +3,23 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, accent, font, fontSize, margin, dimming, notch, fullscreen, directory, title }
+    enum Change { case background, glass, accent, font, fontSize, margin, dimming, notch, fullscreen, directory, title }
     enum DirectoryMode: String { case inherit, home }
     static let maximumBorderMargin: CGFloat = 100
     private let defaults: UserDefaults
     var onChange: ((Change) -> Void)?
+
+    var terminalBackgroundColor: NSColor {
+        backgroundColor.withAlphaComponent(glassyWindow ? 0.18 : 1)
+    }
+
+    var glassyWindow: Bool {
+        didSet {
+            guard glassyWindow != oldValue else { return }
+            defaults.set(glassyWindow, forKey: "glassyWindow")
+            onChange?(.glass)
+        }
+    }
 
     var backgroundColor: NSColor {
         didSet {
@@ -88,6 +100,7 @@ final class Preferences {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        glassyWindow = defaults.bool(forKey: "glassyWindow")
         backgroundColor = Self.color(defaults, key: "backgroundColor") ?? .black
         accentColor = Self.color(defaults, key: "separatorColor") ?? NSColor(white: 0.22, alpha: 1)
         fontFamily = defaults.string(forKey: "fontFamily").flatMap { $0.isEmpty ? nil : $0 }
@@ -113,6 +126,7 @@ final class Preferences {
     }
 
     func reset() {
+        glassyWindow = false
         backgroundColor = .black
         accentColor = NSColor(white: 0.22, alpha: 1)
         fontFamily = nil

@@ -12,12 +12,14 @@ struct PreferencesTests {
         defer { defaults.removePersistentDomain(forName: domain) }
         let preferences = Preferences(defaults: defaults)
         #expect(!preferences.useNativeFullscreen)
+        #expect(!preferences.glassyWindow)
         #expect(preferences.borderMargin == 0)
         preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 0.2)
         preferences.accentColor = .red
         preferences.fontFamily = "Menlo"
         preferences.defaultFontSize = 18
         preferences.borderMargin = 12
+        preferences.glassyWindow = true
         preferences.inactiveTextDimming = 0.5
         preferences.ignoreNotch = true
         preferences.useNativeFullscreen = true
@@ -30,6 +32,7 @@ struct PreferencesTests {
         #expect(loaded.fontFamily == "Menlo")
         #expect(loaded.defaultFontSize == 18)
         #expect(loaded.borderMargin == 12)
+        #expect(loaded.glassyWindow)
         #expect(loaded.font(size: 24).pointSize == 24)
         #expect(loaded.inactiveTextDimming == 0.5)
         #expect(loaded.ignoreNotch)
@@ -41,6 +44,7 @@ struct PreferencesTests {
         #expect(reset.fontFamily == nil)
         #expect(reset.defaultFontSize == 13)
         #expect(reset.borderMargin == 0)
+        #expect(!reset.glassyWindow)
         #expect(reset.inactiveTextDimming == 0.3)
         #expect(!reset.ignoreNotch)
         #expect(!reset.useNativeFullscreen)
@@ -126,9 +130,15 @@ struct PreferencesTests {
         nativeFullscreen.performClick(nil)
         #expect(preferences.useNativeFullscreen)
         #expect(Preferences(defaults: defaults).useNativeFullscreen)
+        let glass = try #require(checkboxes.first { $0.title == "Glassy window" })
+        #expect(glass.state == .off)
+        glass.performClick(nil)
+        #expect(preferences.glassyWindow)
+        #expect(Preferences(defaults: defaults).glassyWindow)
         preferences.reset()
         controller.refresh()
         #expect(nativeFullscreen.state == .off)
+        #expect(glass.state == .off)
         let previewStack = try #require(stack.arrangedSubviews.compactMap { $0 as? NSStackView }
             .first { $0.arrangedSubviews.contains { $0 is PreferencesPreview } })
         let preview = try #require(previewStack.arrangedSubviews.first { $0 is PreferencesPreview })

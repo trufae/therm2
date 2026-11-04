@@ -9,7 +9,7 @@ final class TabBar: NSView {
     private var selectedIndex = 0
     var onSelect: ((Int) -> Void)?
 
-    override var isOpaque: Bool { true }
+    override var isOpaque: Bool { !Preferences.shared.glassyWindow }
 
     func update(titles: [String], selected: Int) {
         if buttons.count != titles.count {
@@ -50,10 +50,10 @@ final class TabBar: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        Self.backgroundColor.setFill()
+        Self.backgroundColor.withAlphaComponent(Preferences.shared.glassyWindow ? 0.18 : 1).setFill()
         dirtyRect.fill()
         if buttons.indices.contains(selectedIndex) {
-            Preferences.shared.accentColor.setFill()
+            Preferences.shared.accentColor.withAlphaComponent(Preferences.shared.glassyWindow ? 0.45 : 1).setFill()
             buttons[selectedIndex].frame.fill()
         }
         Self.borderColor.setFill()

@@ -76,6 +76,71 @@ struct LayoutTests {
         #expect(controller.isFastFullscreen)
     }
 
+    @Test func glassTogglesLiveAcrossTabsAndFullscreenWithoutChangingFocusOrGeometry() throws {
+        let preferences = Preferences.shared
+        let originalGlass = preferences.glassyWindow
+        let originalFullscreen = preferences.useNativeFullscreen
+        preferences.glassyWindow = false
+        preferences.useNativeFullscreen = false
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer {
+            if controller.isFastFullscreen { controller.toggleFullscreen() }
+            window.close()
+            preferences.glassyWindow = originalGlass
+            preferences.useNativeFullscreen = originalFullscreen
+        }
+        controller.newTab()
+        controller.newTab()
+        let tab = try #require(controller.selectedTab)
+        _ = try #require(tab.split(vertical: true))
+        tab.togglePaneMaximized()
+        let responder = window.firstResponder
+        let frame = window.frame
+        let paneFrames = controller.tabs.flatMap(\.panes).map(\.frame)
+        let content = try #require(window.contentView)
+
+        preferences.glassyWindow = true
+        controller.applyPreferences(.glass)
+        #expect(!window.isOpaque)
+        #expect(window.backgroundColor == .clear)
+        #expect(window.hasShadow)
+        #expect(window.frame == frame)
+        #expect(window.firstResponder === responder)
+        #expect(controller.tabs.flatMap(\.panes).map(\.frame) == paneFrames)
+        if #available(macOS 26.0, *) {
+            let glass = try #require(window.contentView as? NSGlassEffectView)
+            #expect(glass.contentView === content)
+            #expect(glass.style == .clear)
+        } else {
+            #expect(window.contentView is NSVisualEffectView)
+        }
+        for pane in controller.tabs.flatMap(\.panes) {
+            #expect(pane.backgroundOpacity == 0.18)
+            #expect(pane.nativeForegroundColor.alphaComponent == 1)
+            #expect(!pane.layoutView.isOpaque)
+        }
+        controller.toggleFullscreen()
+        #expect(window.backgroundColor == .clear)
+        #expect(!window.isOpaque)
+        controller.toggleFullscreen()
+        #expect(window.backgroundColor == .clear)
+
+        preferences.glassyWindow = false
+        controller.applyPreferences(.glass)
+        #expect(window.contentView === content)
+        #expect(window.isOpaque)
+        #expect(window.backgroundColor == preferences.backgroundColor)
+        #expect(!window.hasShadow)
+        #expect(window.firstResponder === responder)
+        for pane in controller.tabs.flatMap(\.panes) {
+            #expect(pane.backgroundOpacity == 1)
+            #expect(pane.layoutView.isOpaque)
+        }
+        tab.togglePaneMaximized()
+        #expect(tab.panes.count == 2)
+    }
+
     @Test func mixedSplitsPreserveSessionsAndCollapseToOriginalPane() throws {
         let tab = tab()
         let original = tab.activePane

@@ -81,6 +81,27 @@ struct RenderingTests {
         #expect(brightContext.identity != dimContext.identity)
     }
 
+    @Test func glassKeepsTextAndExplicitANSIBackgroundsOpaque() throws {
+        let preferences = Preferences.shared
+        let original = preferences.glassyWindow
+        preferences.glassyWindow = true
+        defer { preferences.glassyWindow = original }
+        let pane = TerminalPane(directory: NSTemporaryDirectory())
+        pane.feed(text: "\u{1b}[31;44mA")
+        #expect(pane.backgroundOpacity == 0.18)
+        let (snapshot, context) = try self.context(pane)
+        let row = try #require(snapshot.rows.first)
+        let rendered = pane.textBuilder.buildAttributedString(row: row, absoluteRow: snapshot.firstRow,
+                                                              context: context)
+        let text = try #require(rendered.segments.first?.attributedString)
+        let attributes = text.attributes(at: 0, effectiveRange: nil)
+        let foreground = try #require(attributes[.foregroundColor] as? NSColor)
+        let background = try #require(attributes[.backgroundColor] as? NSColor)
+        #expect(foreground.alphaComponent == 1)
+        #expect(background.alphaComponent == 1)
+        #expect(pane.selectedTextBackgroundColor.alphaComponent == 1)
+    }
+
     @Test func selectedTextDimsWithoutChangingSelectionHighlight() throws {
         let pane = TerminalPane(directory: NSTemporaryDirectory())
         pane.feed(text: "selected")
