@@ -10,9 +10,10 @@ A small, native macOS terminal. No web view, no telemetry, no clutter.
 
 - Tabs, nested splits, instant fullscreen
 - Maximize a pane without killing its session
-- Dark background with optional translucent glass, steady cursor
-- Focus follows the mouse, inactive panes dim
+- Dark background with optional glassy window: real Liquid Glass behind the text on macOS 26 and later
+- Steady cursor, focus follows the mouse, inactive panes dim
 - Find, copy/paste, ⌘+/⌘− to zoom
+- Pinch to resize the font right in the terminal
 - Native preferences: colors, font, border margin, glassy window, dimming, start directory
 - Bundled retro fonts, registered for this app only
 - New tabs and splits inherit the active shell's directory
