@@ -28,6 +28,13 @@ The first build downloads dependencies. `Package.resolved` pins the complete res
 To install, copy `build/Therm2.app` to `/Applications`. Distribution builds need your own
 Developer ID signature and notarization.
 
+Programs running in Therm2 can request microphone access. When macOS prompts,
+allow Therm2 to use the microphone. You can change this permission in System
+Settings → Privacy & Security → Microphone. After installing a build with microphone
+support, quit and reopen Therm2 before retrying your recording command. If a previous
+denial prevents a new prompt, run `tccutil reset Microphone com.pancake.therm2`, then
+retry the command and allow access when prompted.
+
 ## Downloads and releases
 
 [GitHub Releases](https://github.com/trufae/therm2/releases) provides versioned DMGs.

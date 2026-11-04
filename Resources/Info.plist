@@ -26,6 +26,8 @@
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Programs running in Therm2 can use the microphone to record audio when you allow access.</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 </dict>
