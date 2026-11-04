@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, separator, font, fontSize, dimming, notch, fullscreen, directory, title }
+    enum Change { case background, accent, font, fontSize, dimming, notch, fullscreen, directory, title }
     enum DirectoryMode: String { case inherit, home }
     private let defaults: UserDefaults
     var onChange: ((Change) -> Void)?
@@ -15,11 +15,12 @@ final class Preferences {
             save(backgroundColor, key: "backgroundColor", change: .background)
         }
     }
-    var separatorColor: NSColor {
+    var accentColor: NSColor {
         didSet {
-            separatorColor = Self.opaque(separatorColor) ?? oldValue
-            guard separatorColor != oldValue else { return }
-            save(separatorColor, key: "separatorColor", change: .separator)
+            accentColor = Self.opaque(accentColor) ?? oldValue
+            guard accentColor != oldValue else { return }
+            // Keep the stored key to preserve existing split separator preferences.
+            save(accentColor, key: "separatorColor", change: .accent)
         }
     }
     var fontFamily: String? {
@@ -78,7 +79,7 @@ final class Preferences {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         backgroundColor = Self.color(defaults, key: "backgroundColor") ?? .black
-        separatorColor = Self.color(defaults, key: "separatorColor") ?? NSColor(white: 0.22, alpha: 1)
+        accentColor = Self.color(defaults, key: "separatorColor") ?? NSColor(white: 0.22, alpha: 1)
         fontFamily = defaults.string(forKey: "fontFamily").flatMap { $0.isEmpty ? nil : $0 }
         let size = defaults.object(forKey: "defaultFontSize") as? Double ?? 13
         defaultFontSize = size.isFinite && (TerminalPane.minimumFontSize...TerminalPane.maximumFontSize).contains(CGFloat(size))
@@ -100,7 +101,7 @@ final class Preferences {
 
     func reset() {
         backgroundColor = .black
-        separatorColor = NSColor(white: 0.22, alpha: 1)
+        accentColor = NSColor(white: 0.22, alpha: 1)
         fontFamily = nil
         defaultFontSize = 13
         inactiveTextDimming = 0.3

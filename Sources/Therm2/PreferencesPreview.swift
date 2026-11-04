@@ -17,7 +17,7 @@ final class PreferencesPreview: NSView {
     override var isOpaque: Bool { true }
 
     override func draw(_ dirtyRect: NSRect) {
-        preferences.separatorColor.setFill()
+        preferences.accentColor.setFill()
         bounds.fill()
         let interior = bounds.insetBy(dx: 1, dy: 1)
         let leftWidth = floor(interior.width * 0.6)

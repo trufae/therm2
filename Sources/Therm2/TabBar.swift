@@ -4,7 +4,6 @@ import AppKit
 final class TabBar: NSView {
     static let height: CGFloat = 14
     private static let backgroundColor = NSColor(white: 0.09, alpha: 1)
-    private static let selectedColor = NSColor(white: 0.15, alpha: 1)
     private static let borderColor = NSColor(white: 0.22, alpha: 1)
     private var buttons: [NSButton] = []
     private var selectedIndex = 0
@@ -54,7 +53,7 @@ final class TabBar: NSView {
         Self.backgroundColor.setFill()
         dirtyRect.fill()
         if buttons.indices.contains(selectedIndex) {
-            Self.selectedColor.setFill()
+            Preferences.shared.accentColor.setFill()
             buttons[selectedIndex].frame.fill()
         }
         Self.borderColor.setFill()

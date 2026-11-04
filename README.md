@@ -153,7 +153,7 @@ effect the next time you enter fullscreen; exiting still leaves whichever mode i
 
 ## Preferences
 
-⌘, opens a small native panel for terminal background, split separator color, font family and default size,
+⌘, opens a small native panel for terminal background, accent color (split separators and active tab), font family and default size,
 inactive text dimming (0–75%), the starting directory of new tabs and splits, ignoring
 the fullscreen notch, native fullscreen, and using an empty window title. Changes apply to all
 windows and are saved automatically. Font family changes preserve each pane's point size;

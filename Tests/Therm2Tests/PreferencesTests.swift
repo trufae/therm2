@@ -13,7 +13,7 @@ struct PreferencesTests {
         let preferences = Preferences(defaults: defaults)
         #expect(!preferences.useNativeFullscreen)
         preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 0.2)
-        preferences.separatorColor = .red
+        preferences.accentColor = .red
         preferences.fontFamily = "Menlo"
         preferences.defaultFontSize = 18
         preferences.inactiveTextDimming = 0.5
@@ -24,7 +24,7 @@ struct PreferencesTests {
         let loaded = Preferences(defaults: defaults)
         #expect(loaded.backgroundColor.alphaComponent == 1)
         #expect(abs(loaded.backgroundColor.redComponent - 0.1) < 0.0001)
-        #expect(loaded.separatorColor.redComponent > 0.99)
+        #expect(loaded.accentColor.redComponent > 0.99)
         #expect(loaded.fontFamily == "Menlo")
         #expect(loaded.defaultFontSize == 18)
         #expect(loaded.font(size: 24).pointSize == 24)

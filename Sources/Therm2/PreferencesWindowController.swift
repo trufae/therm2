@@ -3,7 +3,7 @@ import AppKit
 final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate {
     private let preferences: Preferences
     private let background = NSColorWell()
-    private let separator = NSColorWell()
+    private let accent = NSColorWell()
     private let fontFamily = NSPopUpButton()
     private let fontSize = NSTextField(string: "13")
     private let fontSizeStepper = NSStepper()
@@ -29,10 +29,11 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         background.target = self
         background.action = #selector(backgroundChanged)
         background.setAccessibilityLabel("Terminal background color")
-        separator.target = self
-        separator.action = #selector(separatorChanged)
-        separator.setAccessibilityLabel("Split separator color")
-        for well in [background, separator] {
+        accent.target = self
+        accent.action = #selector(accentChanged)
+        accent.setAccessibilityLabel("Accent color")
+        accent.toolTip = "Color of split separators and the active tab."
+        for well in [background, accent] {
             well.widthAnchor.constraint(equalToConstant: 54).isActive = true
             well.heightAnchor.constraint(equalToConstant: 24).isActive = true
         }
@@ -84,7 +85,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
 
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Background"), background],
-            [NSTextField(labelWithString: "Split separator"), separator],
+            [NSTextField(labelWithString: "Accent"), accent],
             [NSTextField(labelWithString: "Font family"), fontFamily],
             [NSTextField(labelWithString: "Default font size"), sizeControls],
             [NSTextField(labelWithString: "Inactive text dimming"), dimmingControls],
@@ -146,7 +147,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
 
     func refresh() {
         background.color = preferences.backgroundColor
-        separator.color = preferences.separatorColor
+        accent.color = preferences.accentColor
         let index = fontFamily.itemArray.firstIndex { ($0.representedObject as? String) == preferences.fontFamily } ?? 0
         fontFamily.selectItem(at: index)
         fontSize.integerValue = Int(preferences.defaultFontSize)
@@ -166,7 +167,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     }
 
     @objc private func backgroundChanged() { preferences.backgroundColor = background.color; preview.needsDisplay = true }
-    @objc private func separatorChanged() { preferences.separatorColor = separator.color; preview.needsDisplay = true }
+    @objc private func accentChanged() { preferences.accentColor = accent.color; preview.needsDisplay = true }
     @objc private func fontChanged() {
         preferences.fontFamily = fontFamily.selectedItem?.representedObject as? String
         preview.needsDisplay = true

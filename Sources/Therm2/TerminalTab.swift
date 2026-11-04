@@ -187,7 +187,7 @@ private final class PanePlaceholder: NSView {
 
 final class SplitView: NSSplitView, NSSplitViewDelegate {
     override var dividerThickness: CGFloat { 1 }
-    override var dividerColor: NSColor { Preferences.shared.separatorColor }
+    override var dividerColor: NSColor { Preferences.shared.accentColor }
 
     override init(frame: NSRect) {
         super.init(frame: frame)

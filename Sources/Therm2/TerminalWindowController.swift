@@ -207,7 +207,8 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             for tab in tabs {
                 for pane in tab.panes { pane.setFocused(pane === tab.activePane) }
             }
-        case .separator:
+        case .accent:
+            tabBar.needsDisplay = true
             func redraw(_ view: NSView) {
                 guard let split = view as? SplitView else { return }
                 split.needsDisplay = true
