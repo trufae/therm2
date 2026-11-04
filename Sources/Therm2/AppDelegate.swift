@@ -178,7 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         add(view, "Reset Font Size", #selector(fontSize(_:)), "0", tag: 0)
         view.addItem(.separator())
         for (key, title, tag) in [("h", "Move Divider Left", -1), ("l", "Move Divider Right", 1),
-                                  ("j", "Move Divider Down", -2), ("k", "Move Divider Up", 2)] {
+                                  ("j", "Move Divider Up", 2), ("k", "Move Divider Down", -2)] {
             add(view, title, #selector(resizeSplit(_:)), key, [.command, .shift], tag: tag)
         }
 

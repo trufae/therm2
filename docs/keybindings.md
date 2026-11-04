@@ -9,7 +9,7 @@
 | ⌘1…9 | Select tab |
 | ⇧⌘[ / ⇧⌘] | Previous / next tab |
 | ⌘J / ⌘K | Previous / next pane within the current tab |
-| ⇧⌘H / J / K / L | Move nearest divider left / down / up / right |
+| ⇧⌘H / J / K / L | Move nearest divider left / up / down / right |
 | ⌘Enter | Instant fullscreen |
 | ⇧⌘Enter | Maximize current pane / restore splits |
 | ⇧⌘G | Toggle Ignore Notch in Fullscreen |
