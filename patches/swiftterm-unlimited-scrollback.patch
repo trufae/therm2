@@ -1,0 +1,66 @@
+--- a/Sources/SwiftTerm/Buffer.swift
++++ b/Sources/SwiftTerm/Buffer.swift
+@@ -763,7 +763,7 @@
+         self.scrollback = scrollback
+         self.defaultBidiState = bidiState
+         
+-        let len = hasScrollback ? (scrollback ?? 0) + rows : rows
++        let len = hasScrollback ? max(0, scrollback ?? 0) + rows : rows
+         _lines = CircularBufferLineList (maxLength: len)
+         // Must precede setupLinesCallbacks: attaching a line stamps `selfRef`.
+         selfRef = BufferRef (self)
+@@ -792,6 +792,10 @@
+ 
+     public func getCorrectBufferLength (_ rows: Int) -> Int
+     {
++        if scrollback == -1 {
++            // Preserve existing history and leave room for a taller viewport.
++            return max(lines.maxLength, lines.count + max(0, rows - self.rows))
++        }
+         if hasScrollback {
+             let correct = rows + (scrollback ?? 0)
+             return correct > Int32.max ? Int (Int32.max) : correct
+@@ -800,6 +804,15 @@
+         }
+     }
+     
++    /// Negative one selects unbounded history; allocate slots only as output grows.
++    func ensureScrollbackCapacity(additionalLines: Int) {
++        guard scrollback == -1, additionalLines > 0 else { return }
++        let needed = lines.count + additionalLines
++        if needed > lines.maxLength {
++            lines.maxLength = max(needed, max(1_024, lines.maxLength * 2))
++        }
++    }
++
+     public func getNullCell (attribute: Attribute? = nil) -> CharData
+     {
+         let fgbg = attribute == nil ? Attribute.empty : attribute!.justColor ()
+@@ -1559,6 +1572,7 @@
+                 continue
+             }
+             let linesToAdd = destLineLengths.count - wrappedLines.count
++            ensureScrollbackCapacity(additionalLines: countToInsert + max(0, linesToAdd))
+ 
+             var trimmedLines: Int
+             if yBase == 0 && self.y != lines.count - 1 {
+--- a/Sources/SwiftTerm/Terminal.swift
++++ b/Sources/SwiftTerm/Terminal.swift
+@@ -8354,6 +8354,7 @@
+                          lines: borrowing CircularBufferLineList,
+                          isWrapped: Bool)
+     {
++        buffer.ensureScrollbackCapacity(additionalLines: 1)
+         // The steady-state normal-screen case only rotates one full scrollback
+         // ring and clears the recycled row. Keep it out of the general region
+         // path below, which also handles margins, selections, images, viewport
+--- a/Sources/SwiftTerm/TerminalOptions.swift
++++ b/Sources/SwiftTerm/TerminalOptions.swift
+@@ -155,6 +155,7 @@
+     /// Deprecated?   The new accessibility work will make this useless
+     public var screenReaderMode: Bool
+     /// Size of the scrollback buffer, defaults to 500 lines
++    /// Use -1 for unlimited history that grows on demand; 0 keeps only the screen.
+     public var scrollback: Int
+     /// Default size of the tabs, defaults to 8
+     public var tabStopWidth: Int

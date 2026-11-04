@@ -17,12 +17,18 @@ Distribution builds need your own Developer ID signature and notarization.
 ## Dependency patches
 
 The pinned SwiftTerm release ignores horizontal wheel deltas and lacks foreground-only
-dimming. `make`, `make debug`, and `make test` automatically apply the patches for
-[horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch) and
-[foreground brightness](../patches/swiftterm-foreground-brightness.patch) after
+dimming and unlimited history. `make`, `make debug`, and `make test` automatically apply the patches for
+[horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
+[foreground brightness](../patches/swiftterm-foreground-brightness.patch), and
+[unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch) after
 resolution. The preparation is idempotent and fails on an unexpected upstream revision
 or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
 not apply the patches. `make prepare` applies them without building the app.
+
+Unlimited scrollback grows the history buffer on demand instead of preallocating
+a large fixed limit. Limited mode keeps 0–1,000,000 lines above the visible screen;
+the default is 1,000. Changes apply to existing panes, and reducing the limit
+discards the oldest excess lines. Unlimited history stays in memory for the session.
 
 ## Metal renderer
 

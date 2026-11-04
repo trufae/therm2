@@ -24,7 +24,7 @@ final class TerminalPane: LocalProcessTerminalView {
     init(directory: String) {
         self.directory = directory
         var options = TerminalOptions.default
-        options.scrollback = 1_000
+        options.scrollback = Preferences.shared.scrollbackSize
         options.cursorStyle = .steadyBlock
         options.maximumOscBytes = 1_048_576
         options.kittyGraphics.storageLimitBytesPerScreen = 0

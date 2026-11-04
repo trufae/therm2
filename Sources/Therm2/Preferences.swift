@@ -3,11 +3,29 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, glass, accent, font, fontSize, margin, dimming, notch, fullscreen, directory, title }
+    enum Change { case background, glass, accent, font, fontSize, margin, scrollback, dimming, notch, fullscreen, directory, title }
     enum DirectoryMode: String { case inherit, home }
     static let maximumBorderMargin: CGFloat = 100
+    static let maximumScrollbackLimit = 1_000_000
     private let defaults: UserDefaults
     var onChange: ((Change) -> Void)?
+
+    var scrollbackSize: Int { unlimitedScrollback ? -1 : scrollbackLimit }
+    var unlimitedScrollback: Bool {
+        didSet {
+            guard unlimitedScrollback != oldValue else { return }
+            defaults.set(unlimitedScrollback, forKey: "unlimitedScrollback")
+            onChange?(.scrollback)
+        }
+    }
+    var scrollbackLimit: Int {
+        didSet {
+            scrollbackLimit = min(Self.maximumScrollbackLimit, max(0, scrollbackLimit))
+            guard scrollbackLimit != oldValue else { return }
+            defaults.set(scrollbackLimit, forKey: "scrollbackLimit")
+            onChange?(.scrollback)
+        }
+    }
 
     var terminalBackgroundColor: NSColor {
         backgroundColor.withAlphaComponent(glassyWindow ? 0.18 : 1)
@@ -100,6 +118,9 @@ final class Preferences {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        unlimitedScrollback = defaults.bool(forKey: "unlimitedScrollback")
+        let limit = defaults.object(forKey: "scrollbackLimit") as? Int ?? 1_000
+        scrollbackLimit = (0...Self.maximumScrollbackLimit).contains(limit) ? limit : 1_000
         glassyWindow = defaults.bool(forKey: "glassyWindow")
         backgroundColor = Self.color(defaults, key: "backgroundColor") ?? .black
         accentColor = Self.color(defaults, key: "separatorColor") ?? NSColor(white: 0.22, alpha: 1)
@@ -126,6 +147,8 @@ final class Preferences {
     }
 
     func reset() {
+        unlimitedScrollback = false
+        scrollbackLimit = 1_000
         glassyWindow = false
         backgroundColor = .black
         accentColor = NSColor(white: 0.22, alpha: 1)

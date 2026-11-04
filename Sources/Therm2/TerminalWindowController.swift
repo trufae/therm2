@@ -258,6 +258,8 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         case .margin:
             for pane in tabs.flatMap(\.panes) { (pane.layoutView as? TerminalPaneFrame)?.updateMargin() }
             layoutContent()
+        case .scrollback:
+            for pane in tabs.flatMap(\.panes) { pane.changeScrollback(preferences.scrollbackSize) }
         case .dimming:
             for tab in tabs {
                 for pane in tab.panes { pane.setFocused(pane === tab.activePane) }

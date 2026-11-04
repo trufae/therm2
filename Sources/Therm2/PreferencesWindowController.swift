@@ -9,6 +9,8 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let fontSizeStepper = NSStepper()
     private let borderMargin = NSTextField(string: "0")
     private let borderMarginStepper = NSStepper()
+    private let scrollbackMode = NSPopUpButton()
+    private let scrollbackLimit = NSTextField(string: "1000")
     private let directory = NSPopUpButton()
     private let dimming = NSSlider(value: 45, minValue: 0, maxValue: 75, target: nil, action: nil)
     private let dimmingValue = NSTextField(labelWithString: "30%")
@@ -94,6 +96,26 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         let marginControls = NSStackView(views: [borderMargin, borderMarginStepper, NSTextField(labelWithString: "pt")])
         marginControls.spacing = 6
 
+        scrollbackMode.addItems(withTitles: ["Limited to", "Unlimited"])
+        scrollbackMode.target = self
+        scrollbackMode.action = #selector(scrollbackModeChanged)
+        scrollbackMode.setAccessibilityLabel("Scrollback history mode")
+        let historyFormatter = NumberFormatter()
+        historyFormatter.numberStyle = .decimal
+        historyFormatter.allowsFloats = false
+        historyFormatter.minimum = 0
+        historyFormatter.maximum = NSNumber(value: Preferences.maximumScrollbackLimit)
+        scrollbackLimit.formatter = historyFormatter
+        scrollbackLimit.alignment = .right
+        scrollbackLimit.delegate = self
+        scrollbackLimit.target = self
+        scrollbackLimit.action = #selector(scrollbackLimitChanged)
+        scrollbackLimit.setAccessibilityLabel("Scrollback line limit")
+        scrollbackLimit.toolTip = "Lines kept above the visible screen. Zero disables history. Lowering the limit discards the oldest excess lines."
+        scrollbackLimit.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        let historyControls = NSStackView(views: [scrollbackMode, scrollbackLimit, NSTextField(labelWithString: "lines")])
+        historyControls.spacing = 6
+
         directory.addItems(withTitles: ["Active terminal's directory", "Home directory"])
         directory.target = self
         directory.action = #selector(directoryChanged)
@@ -114,6 +136,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
             [NSTextField(labelWithString: "Font family"), fontFamily],
             [NSTextField(labelWithString: "Default font size"), sizeControls],
             [NSTextField(labelWithString: "Border margin"), marginControls],
+            [NSTextField(labelWithString: "Scrollback history"), historyControls],
             [NSTextField(labelWithString: "Inactive text dimming"), dimmingControls],
             [NSTextField(labelWithString: "New tabs and splits"), directory]
         ])
@@ -183,6 +206,9 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         fontSizeStepper.doubleValue = Double(preferences.defaultFontSize)
         borderMargin.integerValue = Int(preferences.borderMargin)
         borderMarginStepper.doubleValue = Double(preferences.borderMargin)
+        scrollbackMode.selectItem(at: preferences.unlimitedScrollback ? 1 : 0)
+        scrollbackLimit.integerValue = preferences.scrollbackLimit
+        scrollbackLimit.isEnabled = !preferences.unlimitedScrollback
         directory.selectItem(at: preferences.directoryMode == .inherit ? 0 : 1)
         dimming.doubleValue = dimming.maxValue - preferences.inactiveTextDimming * 100
         dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
@@ -215,6 +241,15 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     func controlTextDidEndEditing(_ notification: Notification) {
         if notification.object as? NSTextField === fontSize { fontSizeChanged() }
         if notification.object as? NSTextField === borderMargin { borderMarginChanged() }
+        if notification.object as? NSTextField === scrollbackLimit { scrollbackLimitChanged() }
+    }
+    @objc private func scrollbackModeChanged() {
+        preferences.unlimitedScrollback = scrollbackMode.indexOfSelectedItem == 1
+        refresh()
+    }
+    @objc private func scrollbackLimitChanged() {
+        preferences.scrollbackLimit = scrollbackLimit.integerValue
+        refresh()
     }
     @objc private func borderMarginChanged() {
         preferences.borderMargin = CGFloat(borderMargin.doubleValue)

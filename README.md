@@ -24,7 +24,7 @@ A small, native macOS terminal. No web view, no telemetry, no clutter.
 - Core Graphics by default, Metal opt-in
 - SwiftTerm is the only dependency
 - No telemetry, update checks, session restore, profiles, or background services
-- 1,000 scrollback lines per pane, bounded by lines not bytes
+- Configurable scrollback: a line limit (1,000 by default) or unlimited history
 
 ## Docs
 
