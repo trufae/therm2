@@ -120,11 +120,16 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func moveActivePane(toTabAt index: Int) {
-        guard tabs.indices.contains(index), let source = selectedTab, tabs[index] !== source else { return }
-        let destination = tabs[index]
+        guard index >= 0, let source = selectedTab else { return }
+        let existing = tabs.indices.contains(index) ? tabs[index] : nil
+        guard existing !== source else { return }
         let removesSource = source.panes.count == 1
         source.displayedView.removeFromSuperview()
-        source.moveActivePane(to: destination)
+        let destination = source.moveActivePane(to: existing)
+        if existing == nil {
+            destination.controller = self
+            tabs.append(destination)
+        }
         if removesSource { tabs.remove(at: selectedIndex) }
         // Resolve by identity because removing the source may shift the destination's index.
         selectedIndex = tabs.firstIndex { $0 === destination }!

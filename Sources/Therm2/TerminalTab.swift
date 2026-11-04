@@ -19,12 +19,16 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     var isPaneMaximized: Bool { maximizedPlaceholder != nil }
     var displayedView: NSView { maximizedPlaceholder?.paneView ?? root }
 
-    init(directory: String) {
-        let pane = TerminalPane(directory: directory)
-        root = TerminalPaneFrame(pane: pane)
+    convenience init(directory: String) {
+        self.init(pane: TerminalPane(directory: directory))
+    }
+
+    private init(pane: TerminalPane) {
+        root = pane.layoutView === pane ? TerminalPaneFrame(pane: pane) : pane.layoutView
         activePane = pane
         pane.tab = self
         pane.processDelegate = self
+        pane.setFocused(true)
     }
 
     func focus(_ pane: TerminalPane) {
@@ -70,14 +74,18 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     }
 
     /// Reparent the existing terminal and its PTY without stopping or restarting it.
-    func moveActivePane(to destination: TerminalTab) {
-        guard destination !== self else { return }
+    func moveActivePane(to destination: TerminalTab?) -> TerminalTab {
+        guard destination !== self else { return self }
         let wasMaximized = isPaneMaximized
         setPaneMaximized(false)
         let pane = activePane
         removePane(pane)
         setPaneMaximized(wasMaximized)
-        destination.insert(pane, vertical: true)
+        if let destination {
+            destination.insert(pane, vertical: true)
+            return destination
+        }
+        return TerminalTab(pane: pane)
     }
 
     func close(_ pane: TerminalPane) {

@@ -7,7 +7,7 @@
 | ⌘D / ⇧⌘D | Split left–right / top–bottom |
 | ⌘W / ⇧⌘W / ⌥⌘W | Close pane / tab / window |
 | ⌘1…9 | Select tab |
-| ⇧⌘1…9 | Move current pane to that tab |
+| ⇧⌘1…9 | Move current pane to that tab, or a new tab if missing |
 | ⇧⌘[ / ⇧⌘] | Previous / next tab |
 | ⌘J / ⌘K | Next / previous pane within the current tab |
 | ⇧⌘N / ⇧⌘P | Swap current pane with next / previous pane |
@@ -30,7 +30,8 @@ sessions and split sizes.
 
 Moving a pane to another existing tab adds it as a left–right split beside that tab's
 active pane and follows it there, preserving its running session. The source tab closes
-if it becomes empty. Choosing the current tab or a tab that does not exist does nothing.
+if it becomes empty. If the requested tab does not exist, one new tab is appended with
+the moved pane. Choosing the current tab does nothing.
 
 Option uses the native keyboard layout, including Spanish ⌥º for `\`, ⌥3 for `#`, and
 dead-key accents. It is not mapped to Meta; use Escape followed by a key for terminal
