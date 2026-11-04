@@ -236,6 +236,123 @@ struct LayoutTests {
         #expect(outer.subviews[1] === upperRight.layoutView)
     }
 
+    @Test func movingMaximizedPaneBetweenTabsPreservesNestedTreesAndFocus() throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab()
+        let source = try #require(controller.selectedTab)
+        let left = source.activePane
+        let right = try #require(source.split(vertical: true))
+        let outer = try #require(source.root as? SplitView)
+        outer.setPosition(350, ofDividerAt: 0)
+        let width = left.layoutView.frame.width
+        let moved = try #require(source.split(vertical: false))
+        let movedView = moved.layoutView
+        moved.updateTitle("moving")
+        moved.feed(text: "preserved output")
+        source.togglePaneMaximized()
+
+        controller.newTab()
+        let destination = try #require(controller.selectedTab)
+        let existing = destination.activePane
+        let neighbor = try #require(destination.split(vertical: false))
+        destination.togglePaneMaximized()
+        controller.selectTab(at: 0)
+        controller.moveActivePane(toTabAt: 1)
+
+        #expect(controller.tabs.count == 2)
+        #expect(controller.selectedTab === destination)
+        #expect(window.firstResponder === moved)
+        #expect(source.root === outer)
+        #expect(source.panes.elementsEqual([left, right], by: { $0 === $1 }))
+        #expect(source.activePane === right)
+        #expect(source.isPaneMaximized)
+        #expect(source.displayedView === right.layoutView)
+        #expect(!destination.isPaneMaximized)
+        #expect(destination.panes.elementsEqual([existing, neighbor, moved], by: { $0 === $1 }))
+        #expect(destination.activePane === moved)
+        #expect(moved.layoutView === movedView)
+        #expect(moved.tab === destination)
+        #expect(moved.processDelegate === destination)
+        #expect(destination.title == "moving")
+        #expect(String(decoding: moved.getBufferAsData(), as: UTF8.self).contains("preserved output"))
+        source.togglePaneMaximized()
+        #expect(left.layoutView.frame.width == width)
+        // Exit callbacks must now remove the pane from its destination.
+        destination.processTerminated(source: moved, exitCode: 0)
+        #expect(destination.panes.count == 2)
+        #expect(source.panes.count == 2)
+    }
+
+    @Test(arguments: [0, 1]) func movingOnlyPaneClosesSourceAndKeepsSession(destinationIndex: Int) throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab()
+        controller.newTab()
+        let destination = controller.tabs[destinationIndex]
+        controller.selectTab(at: 1 - destinationIndex)
+        let moved = try #require(controller.selectedTab?.activePane)
+        let pid = moved.process.shellPid
+        #expect(moved.process.running)
+
+        controller.moveActivePane(toTabAt: destinationIndex)
+
+        #expect(controller.tabs.count == 1)
+        #expect(controller.selectedIndex == 0)
+        #expect(controller.selectedTab === destination)
+        #expect(destination.panes.count == 2)
+        #expect(destination.activePane === moved)
+        #expect(window.firstResponder === moved)
+        #expect(moved.process.shellPid == pid)
+        #expect(moved.process.running)
+        #expect(moved.tab === destination)
+        #expect(moved.processDelegate === destination)
+        destination.close(moved)
+        #expect(destination.panes.count == 1)
+        #expect(controller.tabs.count == 1)
+    }
+
+    @Test func movingToCurrentOrMissingTabLeavesMaximizedPaneUnchanged() throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab()
+        let source = try #require(controller.selectedTab)
+        let pane = try #require(source.split(vertical: true))
+        source.togglePaneMaximized()
+        let view = source.displayedView
+        for index in [-1, 0, 1, 8] { controller.moveActivePane(toTabAt: index) }
+        #expect(controller.tabs.count == 1)
+        #expect(source.panes.count == 2)
+        #expect(source.isPaneMaximized)
+        #expect(source.displayedView === view)
+        #expect(source.activePane === pane)
+        #expect(window.firstResponder === pane)
+    }
+
+    @Test(arguments: ["@", "\""]) func shiftedNumberShortcutMovesPane(shiftedCharacter: String) throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab()
+        let source = try #require(controller.selectedTab)
+        let moved = try #require(source.split(vertical: true))
+        controller.newTab()
+        let destination = try #require(controller.selectedTab)
+        controller.selectTab(at: 0)
+        let event = try #require(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: shiftedCharacter,
+            charactersIgnoringModifiers: shiftedCharacter, isARepeat: false, keyCode: 19))
+
+        #expect(window.performKeyEquivalent(with: event))
+        #expect(controller.selectedTab === destination)
+        #expect(destination.activePane === moved)
+        #expect(source.panes.count == 1)
+    }
+
     @Test func borderMarginInsetsSplitPanesAndSurvivesMaximizationAndResize() throws {
         let preferences = Preferences.shared
         let original = preferences.borderMargin

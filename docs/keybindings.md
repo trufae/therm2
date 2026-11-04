@@ -7,6 +7,7 @@
 | ⌘D / ⇧⌘D | Split left–right / top–bottom |
 | ⌘W / ⇧⌘W / ⌥⌘W | Close pane / tab / window |
 | ⌘1…9 | Select tab |
+| ⇧⌘1…9 | Move current pane to that tab |
 | ⇧⌘[ / ⇧⌘] | Previous / next tab |
 | ⌘J / ⌘K | Previous / next pane within the current tab |
 | ⇧⌘H / J / K / L | Move nearest divider left / up / down / right |
@@ -21,6 +22,10 @@
 ## Mouse and modifiers
 
 Focus follows the mouse between panes in the active window. Drag the thin dividers to resize.
+
+Moving a pane to another existing tab adds it as a left–right split beside that tab's
+active pane and follows it there, preserving its running session. The source tab closes
+if it becomes empty. Choosing the current tab or a tab that does not exist does nothing.
 
 Option uses the native keyboard layout, including Spanish ⌥º for `\`, ⌥3 for `#`, and
 dead-key accents. It is not mapped to Meta; use Escape followed by a key for terminal

@@ -47,9 +47,18 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
             return nil
         }
         let pane = TerminalPane(directory: old.newSessionDirectory)
+        insert(pane, vertical: vertical)
+        controller?.layoutChanged(in: self)
+        return pane
+    }
+
+    private func insert(_ pane: TerminalPane, vertical: Bool) {
+        setPaneMaximized(false)
+        let oldView = activePane.layoutView
+        let available = vertical ? oldView.bounds.width : oldView.bounds.height
         pane.tab = self
         pane.processDelegate = self
-        let paneView = TerminalPaneFrame(pane: pane)
+        let paneView = pane.layoutView === pane ? TerminalPaneFrame(pane: pane) : pane.layoutView
         let split = SplitView(frame: oldView.frame)
         split.isVertical = vertical
         replace(oldView, with: split)
@@ -58,8 +67,17 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         split.adjustSubviews()
         split.setPosition((available - split.dividerThickness) / 2, ofDividerAt: 0)
         activePane = pane
-        controller?.layoutChanged(in: self)
-        return pane
+    }
+
+    /// Reparent the existing terminal and its PTY without stopping or restarting it.
+    func moveActivePane(to destination: TerminalTab) {
+        guard destination !== self else { return }
+        let wasMaximized = isPaneMaximized
+        setPaneMaximized(false)
+        let pane = activePane
+        removePane(pane)
+        setPaneMaximized(wasMaximized)
+        destination.insert(pane, vertical: true)
     }
 
     func close(_ pane: TerminalPane) {
@@ -67,18 +85,27 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         let wasMaximized = isPaneMaximized
         setPaneMaximized(false)
         let paneView = pane.layoutView
-        guard let parent = paneView.superview as? SplitView else {
+        guard paneView.superview is SplitView else {
             controller?.closeTab(self)
+            return
+        }
+        pane.stop()
+        removePane(pane)
+        setPaneMaximized(wasMaximized)
+        controller?.layoutChanged(in: self)
+    }
+
+    private func removePane(_ pane: TerminalPane) {
+        let paneView = pane.layoutView
+        guard let parent = paneView.superview as? SplitView else {
+            paneView.removeFromSuperview()
             return
         }
         let sibling = parent.subviews.first { $0 !== paneView }!
         if activePane === pane { activePane = Self.panes(in: sibling)[0] }
-        pane.stop()
         paneView.removeFromSuperview()
         sibling.removeFromSuperview()
         replace(parent, with: sibling)
-        setPaneMaximized(wasMaximized)
-        controller?.layoutChanged(in: self)
     }
 
     func stop() {

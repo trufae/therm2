@@ -15,6 +15,19 @@ final class TerminalWindow: NSWindow {
         super.sendEvent(event)
     }
 
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
+        // Shift+2 produces @ or " depending on the layout, so match the unshifted digit.
+        if modifiers == [.command, .shift],
+           let key = event.characters(byApplyingModifiers: .command),
+           let number = Int(key), (1...9).contains(number),
+           let controller = windowController as? TerminalWindowController {
+            controller.moveActivePane(toTabAt: number - 1)
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     func focusPane(at windowPoint: NSPoint) {
         guard let content = contentView else { return }
         let point = content.superview?.convert(windowPoint, from: nil) ?? windowPoint
@@ -104,6 +117,18 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     func cycleTab(by delta: Int) {
         guard !tabs.isEmpty else { return }
         selectTab(at: (selectedIndex + delta + tabs.count) % tabs.count)
+    }
+
+    func moveActivePane(toTabAt index: Int) {
+        guard tabs.indices.contains(index), let source = selectedTab, tabs[index] !== source else { return }
+        let destination = tabs[index]
+        let removesSource = source.panes.count == 1
+        source.displayedView.removeFromSuperview()
+        source.moveActivePane(to: destination)
+        if removesSource { tabs.remove(at: selectedIndex) }
+        // Resolve by identity because removing the source may shift the destination's index.
+        selectedIndex = tabs.firstIndex { $0 === destination }!
+        layoutChanged(in: destination)
     }
 
     func closeTab(_ tab: TerminalTab) {

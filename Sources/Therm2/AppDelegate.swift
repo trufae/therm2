@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc private func notchGuard(_ sender: Any?) { current?.toggleNotchGuard() }
 
     @objc private func selectTab(_ sender: NSMenuItem) { current?.selectTab(at: sender.tag) }
+    @objc private func movePaneToTab(_ sender: NSMenuItem) { current?.moveActivePane(toTabAt: sender.tag) }
     @objc private func cycleTab(_ sender: NSMenuItem) { current?.cycleTab(by: sender.tag) }
     @objc private func cyclePane(_ sender: NSMenuItem) { current?.selectedTab?.cyclePane(by: sender.tag) }
 
@@ -193,6 +194,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         window.addItem(.separator())
         for number in 1...9 {
             add(window, "Tab \(number)", #selector(selectTab(_:)), "\(number)", tag: number - 1)
+        }
+        window.addItem(.separator())
+        for number in 1...9 {
+            add(window, "Move Pane to Tab \(number)", #selector(movePaneToTab(_:)), "\(number)",
+                [.command, .shift], tag: number - 1)
         }
     }
 }
