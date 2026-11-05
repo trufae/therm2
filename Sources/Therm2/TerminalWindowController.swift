@@ -66,6 +66,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private var savedStyle: NSWindow.StyleMask = []
     private let tabBar = TabBar(frame: .zero)
     private let content = NSView()
+    private let titlebarBackground = NSView()
     private var glassView: NSView?
     var onClose: (() -> Void)?
     var selectedTab: TerminalTab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
@@ -74,7 +75,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     init() {
         let window = TerminalWindow(contentRect: NSRect(x: 0, y: 0, width: 960, height: 600),
-                                    styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                                    styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                                     backing: .buffered, defer: false)
         super.init(window: window)
         window.delegate = self
@@ -85,10 +86,13 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         window.appearance = NSAppearance(named: .darkAqua)
         window.tabbingMode = .disallowed
         window.titlebarAppearsTransparent = true
+        window.titlebarSeparatorStyle = .none
         window.animationBehavior = .none
         window.acceptsMouseMovedEvents = true
         updateFullscreenBehavior()
         window.contentView = content
+        titlebarBackground.wantsLayer = true
+        content.addSubview(titlebarBackground)
         updateWindowBackground()
         window.center()
         content.addSubview(tabBar)
@@ -176,9 +180,19 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         if #available(macOS 26.0, *), let glass = glassView as? NSGlassEffectView {
             glass.cornerRadius = isFullscreen ? 0 : 12
         }
+        // Extend the background under the titlebar, but keep terminal rows below it.
+        let titlebarHeight: CGFloat
+        if !isFullscreen, let window {
+            titlebarHeight = max(0, content.bounds.maxY - content.convert(window.contentLayoutRect, from: nil).maxY)
+        } else {
+            titlebarHeight = 0
+        }
+        titlebarBackground.frame = NSRect(x: 0, y: content.bounds.maxY - titlebarHeight,
+                                         width: content.bounds.width, height: titlebarHeight)
         guard let tab = selectedTab else { return }
         let barHeight = tabs.count > 1 ? TabBar.height : 0
-        let safeTop = isFastFullscreen && !ignoresNotchInFullscreen ? (window?.screen?.safeAreaInsets.top ?? 0) : 0
+        let safeTop = titlebarHeight + (isFastFullscreen && !ignoresNotchInFullscreen
+            ? (window?.screen?.safeAreaInsets.top ?? 0) : 0)
         let height = max(0, content.bounds.height - safeTop - barHeight)
         tab.displayedView.frame = NSRect(x: 0, y: barHeight, width: content.bounds.width, height: height)
         tabBar.frame = NSRect(x: 0, y: 0, width: content.bounds.width, height: barHeight)
@@ -235,6 +249,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         window.isOpaque = !glassy
         window.backgroundColor = glassy ? .clear : (isFastFullscreen ? .black : preferences.backgroundColor)
         window.hasShadow = glassy && !isFullscreen
+        titlebarBackground.layer?.backgroundColor = preferences.terminalBackgroundColor.cgColor
 
         if glassy, glassView == nil {
             let effect: NSView
