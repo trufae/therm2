@@ -51,7 +51,7 @@ final class TabBar: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         Self.backgroundColor.withAlphaComponent(Preferences.shared.glassyWindow ? 0.18 : 1).setFill()
-        dirtyRect.fill()
+        bounds.fill()
         if buttons.indices.contains(selectedIndex) {
             Preferences.shared.accentColor.withAlphaComponent(Preferences.shared.glassyWindow ? 0.45 : 1).setFill()
             buttons[selectedIndex].frame.fill()
