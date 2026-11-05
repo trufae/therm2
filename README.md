@@ -6,6 +6,9 @@ A small, native macOS terminal. No web view, no telemetry, no clutter.
 
 **[Download the latest release →](https://github.com/trufae/therm2/releases)** — DMGs for Intel and Apple Silicon, macOS 13+. The [continuous prerelease](https://github.com/trufae/therm2/releases/tag/continuous) tracks `main`. Ad-hoc signed, not notarized.
 
+Therm2 checks for a different GitHub release version at startup and offers to open the
+releases page. Disable “Check for updates on startup” in Preferences to turn this off.
+
 ## Features
 
 - Tabs, nested splits, instant fullscreen

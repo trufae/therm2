@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class Preferences {
     static let shared = Preferences()
-    enum Change { case background, glass, accent, font, fontSize, margin, scrollback, dimming, notch, fullscreen, directory, title }
+    enum Change { case background, glass, accent, font, fontSize, margin, scrollback, dimming, notch, fullscreen, directory, title, updates }
     enum DirectoryMode: String { case inherit, home }
     static let maximumBorderMargin: CGFloat = 100
     static let maximumScrollbackLimit = 1_000_000
@@ -129,6 +129,13 @@ final class Preferences {
             onChange?(.title)
         }
     }
+    var checkForUpdatesOnStartup: Bool {
+        didSet {
+            guard checkForUpdatesOnStartup != oldValue else { return }
+            defaults.set(checkForUpdatesOnStartup, forKey: "checkForUpdatesOnStartup")
+            onChange?(.updates)
+        }
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -152,6 +159,7 @@ final class Preferences {
         useNativeFullscreen = defaults.bool(forKey: "useNativeFullscreen")
         directoryMode = DirectoryMode(rawValue: defaults.string(forKey: "directoryMode") ?? "") ?? .inherit
         emptyWindowTitle = defaults.bool(forKey: "emptyWindowTitle")
+        checkForUpdatesOnStartup = defaults.object(forKey: "checkForUpdatesOnStartup") as? Bool ?? true
     }
 
     func font(size: CGFloat) -> NSFont {
@@ -176,6 +184,7 @@ final class Preferences {
         useNativeFullscreen = false
         directoryMode = .inherit
         emptyWindowTitle = false
+        checkForUpdatesOnStartup = true
     }
 
     private func save(_ color: NSColor, key: String, change: Change) {

@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         buildMenu()
         newWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
+        UpdateChecker.checkOnStartup()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

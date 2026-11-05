@@ -17,6 +17,7 @@ struct PreferencesTests {
         #expect(preferences.scrollbackLimit == 1_000)
         #expect(preferences.borderMargin == 0)
         #expect(preferences.dimBackground)
+        #expect(preferences.checkForUpdatesOnStartup)
         preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 0.2)
         preferences.accentColor = .red
         preferences.fontFamily = "Menlo"
@@ -31,6 +32,7 @@ struct PreferencesTests {
         preferences.useNativeFullscreen = true
         preferences.directoryMode = .home
         preferences.emptyWindowTitle = true
+        preferences.checkForUpdatesOnStartup = false
         let loaded = Preferences(defaults: defaults)
         #expect(loaded.backgroundColor.alphaComponent == 1)
         #expect(abs(loaded.backgroundColor.redComponent - 0.1) < 0.0001)
@@ -49,6 +51,7 @@ struct PreferencesTests {
         #expect(loaded.useNativeFullscreen)
         #expect(loaded.directoryMode == .home)
         #expect(loaded.emptyWindowTitle)
+        #expect(!loaded.checkForUpdatesOnStartup)
         loaded.reset()
         let reset = Preferences(defaults: defaults)
         #expect(reset.fontFamily == nil)
@@ -63,6 +66,7 @@ struct PreferencesTests {
         #expect(!reset.useNativeFullscreen)
         #expect(reset.directoryMode == .inherit)
         #expect(!reset.emptyWindowTitle)
+        #expect(reset.checkForUpdatesOnStartup)
         #expect(reset.backgroundColor.redComponent == 0)
     }
 
@@ -187,10 +191,16 @@ struct PreferencesTests {
         glass.performClick(nil)
         #expect(preferences.glassyWindow)
         #expect(Preferences(defaults: defaults).glassyWindow)
+        let updates = try #require(checkboxes.first { $0.title == "Check for updates on startup" })
+        #expect(updates.state == .on)
+        updates.performClick(nil)
+        #expect(!preferences.checkForUpdatesOnStartup)
+        #expect(!Preferences(defaults: defaults).checkForUpdatesOnStartup)
         preferences.reset()
         controller.refresh()
         #expect(nativeFullscreen.state == .off)
         #expect(glass.state == .off)
+        #expect(updates.state == .on)
         let grid = try #require(stack.arrangedSubviews.first as? NSGridView)
         let dimBackground = try #require((0..<grid.numberOfRows).compactMap {
             grid.cell(atColumnIndex: 1, rowIndex: $0).contentView as? NSButton

@@ -323,7 +323,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         case .notch: layoutContent()
         case .fullscreen: updateFullscreenBehavior()
         case .title: refreshChrome()
-        case .directory: break
+        case .directory, .updates: break
         }
     }
 

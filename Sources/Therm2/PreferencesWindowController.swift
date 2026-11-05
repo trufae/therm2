@@ -19,6 +19,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let nativeFullscreen = NSButton(checkboxWithTitle: "Use native fullscreen", target: nil, action: nil)
     private let emptyTitle = NSButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
     private let glassyWindow = NSButton(checkboxWithTitle: "Glassy window", target: nil, action: nil)
+    private let checkForUpdates = NSButton(checkboxWithTitle: "Check for updates on startup", target: nil, action: nil)
     private let preview: PreferencesPreview
 
     init(preferences: Preferences = .shared) {
@@ -160,7 +161,9 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         glassyWindow.target = self
         glassyWindow.action = #selector(glassyWindowChanged)
         glassyWindow.toolTip = "Translucent glass behind terminal text. Uses Liquid Glass on macOS 26 or later."
-        let checkboxes = NSStackView(views: [glassyWindow, nativeFullscreen, notch, emptyTitle])
+        checkForUpdates.target = self
+        checkForUpdates.action = #selector(checkForUpdatesChanged)
+        let checkboxes = NSStackView(views: [glassyWindow, nativeFullscreen, notch, emptyTitle, checkForUpdates])
         checkboxes.orientation = .vertical
         checkboxes.alignment = .leading
         checkboxes.spacing = 8
@@ -222,6 +225,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         nativeFullscreen.state = preferences.useNativeFullscreen ? .on : .off
         emptyTitle.state = preferences.emptyWindowTitle ? .on : .off
         glassyWindow.state = preferences.glassyWindow ? .on : .off
+        checkForUpdates.state = preferences.checkForUpdatesOnStartup ? .on : .off
         preview.needsDisplay = true
     }
 
@@ -279,5 +283,6 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     @objc private func nativeFullscreenChanged() { preferences.useNativeFullscreen = nativeFullscreen.state == .on }
     @objc private func emptyTitleChanged() { preferences.emptyWindowTitle = emptyTitle.state == .on }
     @objc private func glassyWindowChanged() { preferences.glassyWindow = glassyWindow.state == .on }
+    @objc private func checkForUpdatesChanged() { preferences.checkForUpdatesOnStartup = checkForUpdates.state == .on }
     @objc private func resetPreferences() { preferences.reset(); refresh() }
 }
