@@ -247,6 +247,12 @@ final class SplitView: NSSplitView, NSSplitViewDelegate {
     override var dividerThickness: CGFloat { 1 }
     override var dividerColor: NSColor { Preferences.shared.accentColor }
 
+    override func drawDivider(in rect: NSRect) {
+        // AppKit's default divider layer caches its color across needsDisplay updates.
+        dividerColor.setFill()
+        rect.fill()
+    }
+
     override init(frame: NSRect) {
         super.init(frame: frame)
         dividerStyle = .thin

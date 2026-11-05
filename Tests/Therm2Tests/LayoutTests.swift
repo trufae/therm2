@@ -12,6 +12,63 @@ struct LayoutTests {
         return tab
     }
 
+    @Test(arguments: [false, true])
+    func accentChangesRepaintExistingDividersAcrossTabs(glassy: Bool) throws {
+        let preferences = Preferences.shared
+        let originalAccent = preferences.accentColor
+        let originalGlass = preferences.glassyWindow
+        preferences.accentColor = .red
+        preferences.glassyWindow = glassy
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer {
+            window.close()
+            preferences.accentColor = originalAccent
+            preferences.glassyWindow = originalGlass
+        }
+
+        func expectDividers(_ tab: TerminalTab, color: NSColor) throws {
+            let root = try #require(tab.root as? SplitView)
+            let nested = try #require(root.subviews.last as? SplitView)
+            window.displayIfNeeded()
+            for split in [root, nested] {
+                let bitmap = try #require(split.bitmapImageRepForCachingDisplay(in: split.bounds))
+                split.cacheDisplay(in: split.bounds, to: bitmap)
+                let expected = try #require(color.usingColorSpace(bitmap.colorSpace))
+                let first = try #require(split.subviews.first)
+                let point = split.isVertical
+                    ? NSPoint(x: first.frame.maxX + 0.5, y: split.bounds.midY)
+                    : NSPoint(x: split.bounds.midX, y: first.frame.maxY + 0.5)
+                let x = Int(point.x * CGFloat(bitmap.pixelsWide) / split.bounds.width)
+                let y = Int(point.y * CGFloat(bitmap.pixelsHigh) / split.bounds.height)
+                let actual = try #require(bitmap.colorAt(x: x, y: y))
+                #expect(abs(actual.redComponent - expected.redComponent) < 0.01)
+                #expect(abs(actual.greenComponent - expected.greenComponent) < 0.01)
+                #expect(abs(actual.blueComponent - expected.blueComponent) < 0.01)
+                #expect(actual.alphaComponent == 1)
+            }
+        }
+
+        for _ in 0..<2 {
+            controller.newTab()
+            let tab = try #require(controller.selectedTab)
+            _ = try #require(tab.split(vertical: true))
+            _ = try #require(tab.split(vertical: false))
+            try expectDividers(tab, color: .red)
+        }
+        preferences.accentColor = .blue
+        controller.applyPreferences(.accent)
+        try expectDividers(try #require(controller.selectedTab), color: .blue)
+        controller.selectedTab?.togglePaneMaximized()
+        preferences.accentColor = .green
+        controller.applyPreferences(.accent)
+        for (index, tab) in controller.tabs.enumerated() {
+            controller.selectTab(at: index)
+            if tab.isPaneMaximized { tab.togglePaneMaximized() }
+            try expectDividers(tab, color: .green)
+        }
+    }
+
     @Test func backgroundAndDimmingSettingsKeepInactivePanesDarker() throws {
         let preferences = Preferences.shared
         let originalBackground = preferences.backgroundColor
