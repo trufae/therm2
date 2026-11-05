@@ -24,12 +24,12 @@ final class PreferencesPreview: NSView {
         let left = NSRect(x: interior.minX, y: interior.minY, width: leftWidth, height: interior.height)
         let right = NSRect(x: left.maxX + 1, y: interior.minY,
                            width: max(0, interior.width - leftWidth - 1), height: interior.height)
-        drawPane(left, lines: ["$ echo 'Hello, world!'", "Hello, world!", "$ _"], brightness: 1)
-        drawPane(right, lines: ["$ pwd", "~/projects", "$ _"], brightness: 1 - preferences.inactiveTextDimming)
+        drawPane(left, lines: ["$ echo 'Hello, world!'", "Hello, world!", "$ _"], dimming: 0)
+        drawPane(right, lines: ["$ pwd", "~/projects", "$ _"], dimming: preferences.inactiveTextDimming)
     }
 
-    private func drawPane(_ rect: NSRect, lines: [String], brightness: Double) {
-        preferences.backgroundColor(brightness: CGFloat(brightness)).setFill()
+    private func drawPane(_ rect: NSRect, lines: [String], dimming: Double) {
+        preferences.backgroundColor(brightness: preferences.dimBackground ? CGFloat(1 - dimming / 2) : 1).setFill()
         rect.fill()
         NSGraphicsContext.saveGraphicsState()
         defer { NSGraphicsContext.restoreGraphicsState() }
@@ -40,7 +40,7 @@ final class PreferencesPreview: NSView {
         let font = preferences.font(size: preferences.defaultFontSize)
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
-            .foregroundColor: NSColor(white: 0.86 * brightness, alpha: 1)
+            .foregroundColor: NSColor(white: 0.86 * (1 - dimming), alpha: 1)
         ]
         let lineHeight = ceil(font.ascender - font.descender + font.leading)
         for (index, line) in lines.enumerated() {

@@ -14,6 +14,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let directory = NSPopUpButton()
     private let dimming = NSSlider(value: 45, minValue: 0, maxValue: 75, target: nil, action: nil)
     private let dimmingValue = NSTextField(labelWithString: "30%")
+    private let dimBackground = NSButton(checkboxWithTitle: "Dim background", target: nil, action: nil)
     private let notch = NSButton(checkboxWithTitle: "Ignore notch in fullscreen", target: nil, action: nil)
     private let nativeFullscreen = NSButton(checkboxWithTitle: "Use native fullscreen", target: nil, action: nil)
     private let emptyTitle = NSButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
@@ -129,6 +130,9 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         let dimmingControls = NSStackView(views: [dimming, dimmingValue])
         dimmingControls.spacing = 8
         dimmingControls.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        dimBackground.target = self
+        dimBackground.action = #selector(dimBackgroundChanged)
+        dimBackground.toolTip = "Dim inactive pane backgrounds by half the text dimming amount. Text always uses the slider setting."
 
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "Background"), background],
@@ -138,6 +142,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
             [NSTextField(labelWithString: "Border margin"), marginControls],
             [NSTextField(labelWithString: "Scrollback history"), historyControls],
             [NSTextField(labelWithString: "Inactive pane dimming"), dimmingControls],
+            [NSGridCell.emptyContentView, dimBackground],
             [NSTextField(labelWithString: "New tabs and splits"), directory]
         ])
         grid.rowSpacing = 12
@@ -212,6 +217,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         directory.selectItem(at: preferences.directoryMode == .inherit ? 0 : 1)
         dimming.doubleValue = dimming.maxValue - preferences.inactiveTextDimming * 100
         dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
+        dimBackground.state = preferences.dimBackground ? .on : .off
         notch.state = preferences.ignoreNotch ? .on : .off
         nativeFullscreen.state = preferences.useNativeFullscreen ? .on : .off
         emptyTitle.state = preferences.emptyWindowTitle ? .on : .off
@@ -263,6 +269,10 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     @objc private func dimmingChanged() {
         preferences.inactiveTextDimming = (dimming.maxValue - dimming.doubleValue).rounded() / 100
         dimmingValue.stringValue = "\(Int((preferences.inactiveTextDimming * 100).rounded()))%"
+        preview.needsDisplay = true
+    }
+    @objc private func dimBackgroundChanged() {
+        preferences.dimBackground = dimBackground.state == .on
         preview.needsDisplay = true
     }
     @objc private func notchChanged() { preferences.ignoreNotch = notch.state == .on }

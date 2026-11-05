@@ -17,9 +17,11 @@ struct LayoutTests {
         let originalBackground = preferences.backgroundColor
         let originalGlass = preferences.glassyWindow
         let originalDimming = preferences.inactiveTextDimming
+        let originalDimBackground = preferences.dimBackground
         preferences.backgroundColor = NSColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 1)
         preferences.glassyWindow = false
         preferences.inactiveTextDimming = 0.3
+        preferences.dimBackground = true
         let controller = TerminalWindowController()
         let window = try #require(controller.window)
         defer {
@@ -27,6 +29,7 @@ struct LayoutTests {
             preferences.backgroundColor = originalBackground
             preferences.glassyWindow = originalGlass
             preferences.inactiveTextDimming = originalDimming
+            preferences.dimBackground = originalDimBackground
         }
         controller.newTab()
         let tab = try #require(controller.selectedTab)
@@ -42,19 +45,29 @@ struct LayoutTests {
             #expect(active.nativeBackgroundColor == preferences.terminalBackgroundColor)
         }
 
-        try expectBackgrounds(brightness: 0.7)
+        try expectBackgrounds(brightness: 0.85)
         preferences.backgroundColor = NSColor(srgbRed: 0.6, green: 0.3, blue: 0.1, alpha: 1)
         controller.applyPreferences(.background)
-        try expectBackgrounds(brightness: 0.7)
+        try expectBackgrounds(brightness: 0.85)
         preferences.inactiveTextDimming = 0.5
         controller.applyPreferences(.dimming)
-        try expectBackgrounds(brightness: 0.5)
+        try expectBackgrounds(brightness: 0.75)
         preferences.glassyWindow = true
         controller.applyPreferences(.glass)
-        try expectBackgrounds(brightness: 0.5, alpha: 0.18)
+        try expectBackgrounds(brightness: 0.75, alpha: 0.18)
+        preferences.dimBackground = false
+        controller.applyPreferences(.dimming)
+        try expectBackgrounds(brightness: 1, alpha: 0.18)
+        #expect(inactive.foregroundBrightness == 0.5)
+        preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.5, blue: 0.2, alpha: 1)
+        controller.applyPreferences(.background)
+        try expectBackgrounds(brightness: 1, alpha: 0.18)
+        preferences.dimBackground = true
+        controller.applyPreferences(.dimming)
+        try expectBackgrounds(brightness: 0.75, alpha: 0.18)
         preferences.backgroundColor = .black
         controller.applyPreferences(.background)
-        try expectBackgrounds(brightness: 0.5, alpha: 0.18)
+        try expectBackgrounds(brightness: 0.75, alpha: 0.18)
     }
 
     @Test func fullscreenCoversMenuBarWithBlackBackingAndRestoresWindow() throws {

@@ -85,6 +85,13 @@ final class Preferences {
             onChange?(.dimming)
         }
     }
+    var dimBackground: Bool {
+        didSet {
+            guard dimBackground != oldValue else { return }
+            defaults.set(dimBackground, forKey: "dimBackground")
+            onChange?(.dimming)
+        }
+    }
     var borderMargin: CGFloat {
         didSet {
             borderMargin = borderMargin.isFinite
@@ -137,6 +144,7 @@ final class Preferences {
             ? CGFloat(size.rounded()) : 13
         let dimming = defaults.object(forKey: "inactiveTextDimming") as? Double ?? 0.3
         inactiveTextDimming = dimming.isFinite && (0...0.75).contains(dimming) ? dimming : 0.3
+        dimBackground = defaults.object(forKey: "dimBackground") as? Bool ?? true
         let margin = defaults.object(forKey: "borderMargin") as? Double ?? 0
         borderMargin = margin.isFinite && (0...Double(Self.maximumBorderMargin)).contains(margin)
             ? CGFloat(margin.rounded()) : 0
@@ -162,6 +170,7 @@ final class Preferences {
         fontFamily = nil
         defaultFontSize = 13
         inactiveTextDimming = 0.3
+        dimBackground = true
         borderMargin = 0
         ignoreNotch = false
         useNativeFullscreen = false

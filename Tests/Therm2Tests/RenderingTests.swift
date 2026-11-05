@@ -23,10 +23,10 @@ struct RenderingTests {
         return [color.redComponent, color.greenComponent, color.blueComponent, color.alphaComponent]
     }
 
-    private func expectDimmed(_ dimmed: NSColor, original: NSColor) throws {
+    private func expectDimmed(_ dimmed: NSColor, original: NSColor, brightness: CGFloat = 0.7) throws {
         let dim = try components(dimmed)
         let original = try components(original)
-        for channel in 0..<3 { #expect(abs(dim[channel] - original[channel] * 0.7) < 0.000_001) }
+        for channel in 0..<3 { #expect(abs(dim[channel] - original[channel] * brightness) < 0.000_001) }
         #expect(dim[3] == original[3])
     }
 
@@ -62,32 +62,38 @@ struct RenderingTests {
         }
     }
 
-    @Test(arguments: [false, true])
-    func focusDarkensColoredBackgroundAndRestoresIt(glassy: Bool) throws {
+    @Test(arguments: [false, true], [false, true])
+    func focusDimsTextAndOptionallyDarkensColoredBackground(glassy: Bool, dimBackground: Bool) throws {
         let preferences = Preferences.shared
         let originalBackground = preferences.backgroundColor
         let originalGlass = preferences.glassyWindow
         let originalDimming = preferences.inactiveTextDimming
+        let originalDimBackground = preferences.dimBackground
         defer {
             preferences.backgroundColor = originalBackground
             preferences.glassyWindow = originalGlass
             preferences.inactiveTextDimming = originalDimming
+            preferences.dimBackground = originalDimBackground
         }
         preferences.backgroundColor = NSColor(srgbRed: 0.2, green: 0.4, blue: 0.6, alpha: 1)
         preferences.glassyWindow = glassy
         preferences.inactiveTextDimming = 0.3
+        preferences.dimBackground = dimBackground
+        let backgroundBrightness: CGFloat = dimBackground ? 0.85 : 1
         let pane = TerminalPane(directory: NSTemporaryDirectory())
         let background = pane.nativeBackgroundColor
         let (_, bright) = try context(pane)
 
         pane.setFocused(false)
-        try expectDimmed(pane.nativeBackgroundColor, original: background)
+        #expect(pane.foregroundBrightness == 0.7)
+        try expectDimmed(pane.nativeBackgroundColor, original: background, brightness: backgroundBrightness)
         #expect(pane.backgroundOpacity == (glassy ? 0.18 : 1))
         let (_, dimmed) = try context(pane)
-        try expectDimmed(dimmed.effectiveBackgroundColor, original: bright.effectiveBackgroundColor)
+        #expect(dimmed.foregroundBrightness == 0.7)
+        try expectDimmed(dimmed.effectiveBackgroundColor, original: bright.effectiveBackgroundColor, brightness: backgroundBrightness)
         #expect(bright.identity != dimmed.identity)
         pane.setFocused(false)
-        try expectDimmed(pane.nativeBackgroundColor, original: background)
+        try expectDimmed(pane.nativeBackgroundColor, original: background, brightness: backgroundBrightness)
 
         pane.setFocused(true)
         #expect(pane.nativeBackgroundColor == background)

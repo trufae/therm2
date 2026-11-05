@@ -87,9 +87,9 @@ final class TerminalPane: LocalProcessTerminalView {
 
     func setFocused(_ focused: Bool) {
         let preferences = Preferences.shared
-        let brightness = focused ? 1 : CGFloat(1 - preferences.inactiveTextDimming)
-        foregroundBrightness = brightness
-        nativeBackgroundColor = preferences.backgroundColor(brightness: brightness)
+        let dimming = focused ? 0 : CGFloat(preferences.inactiveTextDimming)
+        foregroundBrightness = 1 - dimming
+        nativeBackgroundColor = preferences.backgroundColor(brightness: preferences.dimBackground ? 1 - dimming / 2 : 1)
             .withAlphaComponent(preferences.terminalBackgroundColor.alphaComponent)
         layoutView.needsDisplay = true
     }

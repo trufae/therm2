@@ -16,6 +16,7 @@ struct PreferencesTests {
         #expect(!preferences.unlimitedScrollback)
         #expect(preferences.scrollbackLimit == 1_000)
         #expect(preferences.borderMargin == 0)
+        #expect(preferences.dimBackground)
         preferences.backgroundColor = NSColor(srgbRed: 0.1, green: 0.2, blue: 0.3, alpha: 0.2)
         preferences.accentColor = .red
         preferences.fontFamily = "Menlo"
@@ -25,6 +26,7 @@ struct PreferencesTests {
         preferences.scrollbackLimit = 25_000
         preferences.unlimitedScrollback = true
         preferences.inactiveTextDimming = 0.5
+        preferences.dimBackground = false
         preferences.ignoreNotch = true
         preferences.useNativeFullscreen = true
         preferences.directoryMode = .home
@@ -42,6 +44,7 @@ struct PreferencesTests {
         #expect(loaded.scrollbackSize == -1)
         #expect(loaded.font(size: 24).pointSize == 24)
         #expect(loaded.inactiveTextDimming == 0.5)
+        #expect(!loaded.dimBackground)
         #expect(loaded.ignoreNotch)
         #expect(loaded.useNativeFullscreen)
         #expect(loaded.directoryMode == .home)
@@ -55,6 +58,7 @@ struct PreferencesTests {
         #expect(!reset.unlimitedScrollback)
         #expect(reset.scrollbackSize == 1_000)
         #expect(reset.inactiveTextDimming == 0.3)
+        #expect(reset.dimBackground)
         #expect(!reset.ignoreNotch)
         #expect(!reset.useNativeFullscreen)
         #expect(reset.directoryMode == .inherit)
@@ -188,6 +192,17 @@ struct PreferencesTests {
         #expect(nativeFullscreen.state == .off)
         #expect(glass.state == .off)
         let grid = try #require(stack.arrangedSubviews.first as? NSGridView)
+        let dimBackground = try #require((0..<grid.numberOfRows).compactMap {
+            grid.cell(atColumnIndex: 1, rowIndex: $0).contentView as? NSButton
+        }.first { $0.title == "Dim background" })
+        #expect(dimBackground.state == .on)
+        var dimmingChanges = 0
+        preferences.onChange = { if case .dimming = $0 { dimmingChanges += 1 } }
+        dimBackground.performClick(nil)
+        #expect(!preferences.dimBackground)
+        #expect(!Preferences(defaults: defaults).dimBackground)
+        #expect(preferences.inactiveTextDimming == 0.3)
+        #expect(dimmingChanges == 1)
         let historyRow = try #require((0..<grid.numberOfRows).first {
             (grid.cell(atColumnIndex: 0, rowIndex: $0).contentView as? NSTextField)?.stringValue == "Scrollback history"
         })
@@ -210,6 +225,7 @@ struct PreferencesTests {
         controller.refresh()
         #expect(mode.indexOfSelectedItem == 0)
         #expect(limit.integerValue == 1_000)
+        #expect(dimBackground.state == .on)
         let previewStack = try #require(stack.arrangedSubviews.compactMap { $0 as? NSStackView }
             .first { $0.arrangedSubviews.contains { $0 is PreferencesPreview } })
         let preview = try #require(previewStack.arrangedSubviews.first { $0 is PreferencesPreview })
