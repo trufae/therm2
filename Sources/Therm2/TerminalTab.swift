@@ -157,7 +157,6 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         if !maximized, let placeholder = maximizedPlaceholder {
             let pane = placeholder.pane
             let paneView = pane.layoutView
-            pane.setMaximized(false)
             paneView.removeFromSuperview()
             paneView.frame = placeholder.frame
             placeholder.superview?.replaceSubview(placeholder, with: paneView)
@@ -169,7 +168,6 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
             root.removeFromSuperview()
             maximizedPlaceholder = placeholder
             paneView.frame = root.bounds
-            activePane.setMaximized(true)
         }
     }
 

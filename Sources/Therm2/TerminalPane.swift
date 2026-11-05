@@ -12,7 +12,6 @@ final class TerminalPane: LocalProcessTerminalView {
     private(set) var directory: String
     private(set) var started = false
     private var pinchFontSize: CGFloat?
-    private var maximizedMarker: MaximizedPaneMarker?
     private var stopped = false
     var layoutView: NSView { superview as? TerminalPaneFrame ?? self }
 
@@ -92,17 +91,6 @@ final class TerminalPane: LocalProcessTerminalView {
         nativeBackgroundColor = preferences.backgroundColor(brightness: preferences.dimBackground ? 1 - dimming / 2 : 1)
             .withAlphaComponent(preferences.terminalBackgroundColor.alphaComponent)
         layoutView.needsDisplay = true
-    }
-
-    func setMaximized(_ maximized: Bool) {
-        if maximized, maximizedMarker == nil {
-            let marker = MaximizedPaneMarker(frame: NSRect(x: bounds.maxX - 11, y: bounds.maxY - 11,
-                                                           width: 7, height: 7))
-            marker.autoresizingMask = [.minXMargin, .minYMargin]
-            addSubview(marker, positioned: .above, relativeTo: nil)
-            maximizedMarker = marker
-        }
-        maximizedMarker?.isHidden = !maximized
     }
 
     func setFontSize(_ size: CGFloat) {
@@ -242,19 +230,6 @@ final class TerminalPaneFrame: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
         return hit === self ? pane : hit
-    }
-}
-
-private final class MaximizedPaneMarker: NSView {
-    private static let color = NSColor(white: 0.65, alpha: 1)
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    override func draw(_ dirtyRect: NSRect) {
-        Self.color.setStroke()
-        let square = NSBezierPath(rect: bounds.insetBy(dx: 0.5, dy: 0.5))
-        square.lineWidth = 1
-        square.stroke()
     }
 }
 
