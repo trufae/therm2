@@ -85,6 +85,13 @@ Retina sizes) in `Assets.xcassets/AppIcon.appiconset`. Output defaults to `build
 `make` and `make run` reuse these exports until an SVG or styling edit; each build
 replaces only the app bundle so macOS notices the new icon. `make clean` is not needed.
 
+## Drag and drop
+
+File drops insert shell-quoted paths with a trailing space and honor bracketed paste.
+Screenshot thumbnails and other promised files, as well as raw bitmap images, are
+saved in private `Therm2-Drop-*` directories under the macOS temporary directory.
+These files remain available after the pane closes, until macOS cleans temporary files.
+
 ## Tests
 
 `make test` checks nested split insertion/collapse, view release, focus cycling, minimum

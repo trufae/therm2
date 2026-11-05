@@ -13,6 +13,7 @@ final class TerminalPane: LocalProcessTerminalView {
     private(set) var started = false
     private var pinchFontSize: CGFloat?
     private var maximizedMarker: MaximizedPaneMarker?
+    private var stopped = false
     var layoutView: NSView { superview as? TerminalPaneFrame ?? self }
 
     var newSessionDirectory: String {
@@ -40,9 +41,39 @@ final class TerminalPane: LocalProcessTerminalView {
         optionAsMetaKey = false
         suspendsRenderingWhenNotVisible = true
         setAccessibilityLabel("Terminal")
+        registerForDraggedTypes(TerminalDrop.pasteboardTypes)
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(directory:)") }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard !stopped, TerminalDrop.canRead(sender.draggingPasteboard) else { return [] }
+        // Never move or delete the source: a terminal drop only inserts text.
+        let allowed = sender.draggingSourceOperationMask
+        return allowed.contains(.copy) ? .copy : allowed.intersection(.generic)
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        draggingEntered(sender)
+    }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        !draggingEntered(sender).isEmpty
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard prepareForDragOperation(sender) else { return false }
+        window?.makeFirstResponder(self)
+        return TerminalDrop.receive(sender.draggingPasteboard) { [weak self] result in
+            guard let self, !self.stopped else { return }
+            switch result {
+            case .success(let text): self.pasteText(text)
+            case .failure(let error):
+                NSLog("Could not receive terminal drop: %@", error.localizedDescription)
+                NSSound.beep()
+            }
+        }
+    }
 
     override var frame: NSRect {
         didSet {
@@ -111,6 +142,7 @@ final class TerminalPane: LocalProcessTerminalView {
     }
 
     func stop() {
+        stopped = true
         processDelegate = nil
         tab = nil
         if started { terminate() }
