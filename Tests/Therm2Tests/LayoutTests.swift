@@ -370,8 +370,6 @@ struct LayoutTests {
         let moved = source.activePane
         let view = moved.layoutView
         let pid = moved.process.shellPid
-        // Keep the marker on its own line so a shell prompt cannot overwrite it.
-        moved.feed(text: "\r\npreserved output\r\n")
         #expect(moved.process.running)
 
         controller.moveActivePane(toTabAt: destinationIndex)
@@ -391,7 +389,6 @@ struct LayoutTests {
         #expect(moved.tab === destination)
         #expect(moved.processDelegate === destination)
         #expect(moved.foregroundBrightness == 1)
-        #expect(String(decoding: moved.getBufferAsData(), as: UTF8.self).contains("preserved output"))
         if splitSource {
             #expect(controller.tabs[0] === source)
             #expect(source.panes.count == 1)
@@ -399,6 +396,23 @@ struct LayoutTests {
         }
         destination.processTerminated(source: moved, exitCode: 0)
         #expect(controller.tabs.count == (splitSource ? 1 : 0))
+    }
+
+    @Test(arguments: [false, true])
+    func movingPaneToNewTabPreservesBuffer(splitSource: Bool) throws {
+        let source = tab()
+        if splitSource {
+            _ = try #require(source.split(vertical: true))
+            source.togglePaneMaximized()
+        }
+        let moved = source.activePane
+        moved.feed(text: "preserved output\r\n")
+        let buffer = moved.getBufferAsData()
+
+        let destination = source.moveActivePane(to: nil)
+
+        #expect(destination.activePane === moved)
+        #expect(moved.getBufferAsData() == buffer)
     }
 
     @Test func movingToCurrentOrInvalidTabLeavesMaximizedPaneUnchanged() throws {
@@ -518,8 +532,6 @@ struct LayoutTests {
         let pids = [first, second].map { $0.process.shellPid }
         first.updateTitle("first")
         second.updateTitle("second")
-        // The login shell may print its first prompt while this test is running.
-        first.feed(text: "\r\npreserved output\r\n")
         window.makeFirstResponder(first)
 
         tab.swapPane(by: 1)
@@ -532,7 +544,6 @@ struct LayoutTests {
         #expect(tab.title == "second · first")
         #expect([first, second].map { $0.process.shellPid } == pids)
         #expect(first.process.running && second.process.running)
-        #expect(String(decoding: first.getBufferAsData(), as: UTF8.self).contains("preserved output"))
         for pane in tab.panes {
             #expect(pane.tab === tab)
             #expect(pane.processDelegate === tab)
@@ -541,6 +552,26 @@ struct LayoutTests {
         #expect(tab.panes.elementsEqual([first, second], by: { $0 === $1 }))
         #expect(tab.panes.map { $0.layoutView.frame } == frames)
         #expect(window.firstResponder === first)
+    }
+
+    @Test(arguments: [false, true])
+    func swappingSiblingPanesPreservesBuffers(vertical: Bool) throws {
+        let tab = tab()
+        let first = tab.activePane
+        let second = try #require(tab.split(vertical: vertical))
+        // Live shells can redraw over injected text on startup or SIGWINCH.
+        // Keep these panes unstarted so only the swap can change their buffers.
+        first.feed(text: "first output\r\n")
+        second.feed(text: "second output\r\n")
+        let buffers = [first, second].map { $0.getBufferAsData() }
+
+        tab.swapPane(by: 1)
+        #expect(tab.panes.elementsEqual([second, first], by: { $0 === $1 }))
+        #expect([first, second].map { $0.getBufferAsData() } == buffers)
+
+        tab.swapPane(by: -1)
+        #expect(tab.panes.elementsEqual([first, second], by: { $0 === $1 }))
+        #expect([first, second].map { $0.getBufferAsData() } == buffers)
     }
 
     @Test(arguments: [1, -1], [false, true])
