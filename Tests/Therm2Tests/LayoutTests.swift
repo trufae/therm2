@@ -134,6 +134,34 @@ struct LayoutTests {
         #expect(controller.isFastFullscreen)
     }
 
+    @Test(arguments: [false, true])
+    func fastFullscreenDisablesAlwaysOnTopAndRestoresWindowLevel(alwaysOnTop: Bool) throws {
+        let preferences = Preferences.shared
+        let original = preferences.useNativeFullscreen
+        preferences.useNativeFullscreen = false
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer {
+            if controller.isFastFullscreen { controller.toggleFullscreen() }
+            window.close()
+            preferences.useNativeFullscreen = original
+        }
+        if alwaysOnTop { controller.toggleAlwaysOnTop() }
+        let level = window.level
+        #expect(controller.isAlwaysOnTop == alwaysOnTop)
+        for _ in 0..<2 {
+            controller.toggleFullscreen()
+            #expect(controller.isFastFullscreen)
+            #expect(window.level == .normal)
+            #expect(!controller.isAlwaysOnTop)
+            controller.toggleAlwaysOnTop()
+            #expect(window.level == .normal)
+            controller.toggleFullscreen()
+            #expect(window.level == level)
+            #expect(controller.isAlwaysOnTop == alwaysOnTop)
+        }
+    }
+
     @Test func glassTogglesLiveAcrossTabsAndFullscreenWithoutChangingFocusOrGeometry() throws {
         let preferences = Preferences.shared
         let originalGlass = preferences.glassyWindow

@@ -4,6 +4,7 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private var windows: [ObjectIdentifier: TerminalWindowController] = [:]
     private var preferencesWindow: PreferencesWindowController?
+    private var presentationUpdatePending = false
     private var current: TerminalWindowController? {
         (NSApp.keyWindow?.windowController as? TerminalWindowController)
             ?? (NSApp.mainWindow?.windowController as? TerminalWindowController)
@@ -34,11 +35,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func updatePresentation() {
+        // Key-window notifications arrive during app switching. Wait for the handoff
+        // to finish before reading the new key window or changing Dock/menu-bar state.
+        guard !presentationUpdatePending else { return }
+        presentationUpdatePending = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.presentationUpdatePending = false
+            self.applyPresentation()
+        }
+    }
+
+    private func applyPresentation() {
+        // AppKit applies these options only while we are active. Let it switch to
+        // the next app's options instead of resetting them during deactivation.
+        guard NSApp.isActive else { return }
         // AppKit owns presentation options while a native fullscreen Space is active.
         let controller = NSApp.keyWindow?.windowController as? TerminalWindowController
         guard !NSApp.presentationOptions.contains(.fullScreen),
               controller?.isTransitioningNativeFullscreen != true else { return }
-        let fullscreen = NSApp.isActive && controller?.isFastFullscreen == true
+        let fullscreen = controller?.isFastFullscreen == true
         let options: NSApplication.PresentationOptions = fullscreen
             ? [.autoHideDock, .autoHideMenuBar, .disableMenuBarTransparency] : []
         if NSApp.presentationOptions != options { NSApp.presentationOptions = options }
@@ -106,7 +122,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         if item.action == #selector(alwaysOnTop(_:)) {
             item.state = current?.isAlwaysOnTop == true ? .on : .off
-            return current != nil
+            return current != nil && current?.isFastFullscreen != true
         }
         if item.action == #selector(notchGuard(_:)) {
             item.state = current?.ignoresNotchInFullscreen == true ? .on : .off

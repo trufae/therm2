@@ -64,6 +64,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     var isFullscreen: Bool { isFastFullscreen || window?.styleMask.contains(.fullScreen) == true }
     private var savedFrame = NSRect.zero
     private var savedStyle: NSWindow.StyleMask = []
+    private var savedLevel: NSWindow.Level = .normal
     private let tabBar = TabBar(frame: .zero)
     private let content = NSView()
     private let titlebarBackground = NSView()
@@ -212,6 +213,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         if isFastFullscreen {
             isFastFullscreen = false
             window.styleMask = savedStyle
+            window.level = savedLevel
             // If a monitor disappeared, return to a visible part of the current display.
             let frame = NSScreen.screens.contains(where: { $0.visibleFrame.intersects(savedFrame) })
                 ? savedFrame : screen.visibleFrame.insetBy(dx: 60, dy: 60)
@@ -220,8 +222,11 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         } else {
             savedFrame = window.frame
             savedStyle = window.styleMask
+            savedLevel = window.level
             isFastFullscreen = true
             window.styleMask = .borderless
+            // A floating fullscreen window would cover the app selected with ⌘Tab.
+            window.level = .normal
             window.setFrame(screen.frame, display: true, animate: false)
         }
         updateWindowBackground()
@@ -323,6 +328,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func toggleAlwaysOnTop() {
+        guard !isFastFullscreen else { return }
         window?.level = isAlwaysOnTop ? .normal : .floating
         window?.orderFront(nil)
     }

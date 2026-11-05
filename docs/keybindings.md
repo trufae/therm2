@@ -20,6 +20,9 @@
 | ⌘F | Find in active terminal |
 | ⌘C / ⌘V | Copy selection / paste |
 
+Fast fullscreen temporarily disables Always on Top so other apps can cover Therm2
+when switching with ⌘Tab. Leaving fullscreen restores the previous window level.
+
 ## Mouse and modifiers
 
 Focus follows the mouse between panes in the active window. Drag the thin dividers to resize.
