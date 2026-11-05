@@ -1,5 +1,5 @@
 APP     = build/Therm2.app
-DESTDIR = $(HOME)/Applications
+DESTDIR = /Applications
 .PHONY: all debug dmg run prepare test icons install uninstall sign clean
 
 all:
@@ -33,6 +33,12 @@ install: all
 
 uninstall:
 	rm -rf $(DESTDIR)/Therm2.app
+
+user-install:
+	$(MAKE) install DESTDIR=$(HOME)/Applications
+
+user-uninstall:
+	$(MAKE) uninstall DESTDIR=$(HOME)/Applications
 
 clean:
 	swift package clean
