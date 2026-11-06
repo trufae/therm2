@@ -30,6 +30,43 @@ struct RenderingTests {
         #expect(dim[3] == original[3])
     }
 
+    // OSC-only updates must reach the rendered caret while the prompt is idle,
+    // and resetting them must restore the default without changing caret text.
+    @Test func cursorColorCommandsUpdateRenderingAndRestoreDefault() async throws {
+        let pane = TerminalPane(directory: NSTemporaryDirectory())
+        pane.caretTextColor = .systemGreen
+        let original = try components(pane.effectiveCaretColor)
+        let originalText = try components(pane.effectiveCaretTextColor)
+
+        func feed(_ text: String) async {
+            pane.feed(text: text)
+            // Cursor-color callbacks are delivered on the main queue.
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.main.async { continuation.resume() }
+            }
+        }
+
+        for shade in ["40", "ff", "80"] {
+            await feed("\u{1b}]12;rgb:\(shade)/\(shade)/\(shade)\u{1b}\\")
+            let (snapshot, _) = try context(pane)
+            let cursor = try #require(snapshot.cursor)
+            let actual = try components(cursor.renderData.cursorColor)
+            let expected = CGFloat(try #require(Int(shade, radix: 16))) / 255
+            for channel in 0..<3 { #expect(abs(actual[channel] - expected) < 0.000_001) }
+            #expect(try components(cursor.renderData.textColor) == originalText)
+        }
+
+        await feed("\u{1b}]112\u{1b}\\")
+        let (snapshot, _) = try context(pane)
+        let cursor = try #require(snapshot.cursor)
+        let restored = try components(cursor.renderData.cursorColor)
+        // Restoring the foreground passes through the terminal's 16-bit RGB channels.
+        for channel in 0..<3 { #expect(abs(restored[channel] - original[channel]) <= 1.0 / 65535) }
+        #expect(restored[3] == original[3])
+        #expect(try components(cursor.renderData.textColor) == originalText)
+        pane.withTerminal { terminal in #expect(terminal.cursorColor == nil) }
+    }
+
     @Test func focusDimsTextKeepsBlackBackgroundAndRestoresCachedColors() throws {
         let pane = TerminalPane(directory: NSTemporaryDirectory())
         pane.feed(text: "\u{1b}[31;44mA\u{1b}[38;2;200;120;80;48;2;30;60;90mB\u{1b}[0mC")

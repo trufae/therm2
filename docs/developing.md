@@ -17,10 +17,12 @@ Distribution builds need your own Developer ID signature and notarization.
 ## Dependency patches
 
 The pinned SwiftTerm release ignores horizontal wheel deltas and lacks foreground-only
-dimming and unlimited history. `make`, `make debug`, and `make test` automatically apply the patches for
+dimming and unlimited history. Its cursor-color delegate signature also prevents
+OSC 12 updates from reaching the view. `make`, `make debug`, and `make test` automatically apply the patches for
 [horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
-[foreground brightness](../patches/swiftterm-foreground-brightness.patch), and
-[unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch) after
+[foreground brightness](../patches/swiftterm-foreground-brightness.patch),
+[unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch), and
+[cursor colors](../patches/swiftterm-cursor-color.patch) after
 resolution. The preparation is idempotent and fails on an unexpected upstream revision
 or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
 not apply the patches. `make prepare` applies them without building the app.
@@ -101,7 +103,8 @@ cursor-key fallback, fractional travel, gesture boundaries, modifiers, and scrol
 Mouse focus, text-field focus preservation, and accumulated pinch zoom are covered too.
 Renderer checks cover text dimming and optional default background dimming at half its
 strength, unchanged black and explicit ANSI backgrounds and selection highlights, and
-restoring colors when focus changes.
+restoring colors when focus changes. Cursor-color checks feed OSC 12 and OSC 112
+through the parser and verify rendered colors and restoration without real-time animation.
 Preferences persistence and bundled font registration are covered. A real PTY test checks directory inheritance without
 OSC 7, matching kernel window size, and SIGWINCH delivery when a pane is split.
 Rendering throughput and resident memory still need profiling on representative

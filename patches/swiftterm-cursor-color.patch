@@ -1,0 +1,37 @@
+--- a/Sources/SwiftTerm/Apple/AppleTerminalView.swift
++++ b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
+@@ -2632,7 +2632,6 @@
+-    /// Sets the color for the cursor block, and the text when it is under that cursor in block mode
+-    public func setCursorColor(source: Terminal, color: Color?, textColor: Color?) {
++    /// Implements TerminalDelegate's cursor color callback (OSC 12 / OSC 112).
++    public nonisolated func setCursorColor(source: Terminal, color: Color?) {
+         let nativeColor = color.map { TTColor.make(color: $0) }
+-        let nativeTextColor = textColor.map { TTColor.make(color: $0) }
+         onMain { [weak self] in
+             guard let self else { return }
+             if let nativeColor {
+@@ -2641,13 +2640,6 @@
+             } else if let caretView = self.caretView {
+                 self.cursorColorIsDefault = true
+                 caretView.caretColor = caretView.defaultCaretColor
+-            }
+-            if let nativeTextColor {
+-                self.cursorTextColorIsDefault = false
+-                self.caretTextColor = nativeTextColor
+-            } else if let caretView = self.caretView {
+-                self.cursorTextColorIsDefault = true
+-                caretView.caretTextColor = caretView.defaultCaretTextColor
+             }
+ #if canImport(MetalKit) && os(macOS)
+             self.frameDriver.markDirty()
+--- a/Sources/SwiftTerm/EscapeSequenceParser.swift
++++ b/Sources/SwiftTerm/EscapeSequenceParser.swift
+@@ -792,7 +792,7 @@
+         case 12:   terminal.oscSetColors(data, startAt: 2)
+         case 52:   terminal.oscClipboard(data)
+         case 104:  terminal.oscResetColor(data)
+-        case 112:  terminal.tdel?.setCursorColor(source: terminal, color: nil)
++        case 112:  terminal.cursorColor = nil
+         case 133:  terminal.oscSemanticPrompt(data)
+         case 777:  terminal.oscNotification(data)
+         case 1337: terminal.osciTerm2(data)
