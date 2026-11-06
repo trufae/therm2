@@ -17,6 +17,10 @@ final class TerminalPane: LocalProcessTerminalView {
 
     var newSessionDirectory: String {
         guard Preferences.shared.directoryMode == .inherit else { return NSHomeDirectory() }
+        return currentWorkingDirectory
+    }
+
+    var currentWorkingDirectory: String {
         if process.running, let path = WorkingDirectory.path(of: process.shellPid) { return path }
         return WorkingDirectory.valid(directory) ? directory : NSHomeDirectory()
     }
@@ -41,6 +45,10 @@ final class TerminalPane: LocalProcessTerminalView {
         suspendsRenderingWhenNotVisible = true
         setAccessibilityLabel("Terminal")
         registerForDraggedTypes(TerminalDrop.pasteboardTypes)
+        localLinkResolver = { [weak self] link in
+            guard let self else { return nil }
+            return TerminalLink.fileURL(link, directory: self.currentWorkingDirectory)
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(directory:)") }

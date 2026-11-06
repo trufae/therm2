@@ -49,4 +49,26 @@ struct ProcessTests {
         #expect(!WorkingDirectory.valid("/this/directory/does/not/exist"))
         #expect(WorkingDirectory.path(of: getpid()) != nil)
     }
+
+    @Test func linkResolutionFollowsShellCwdEvenWhenNewSessionsStartAtHome() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Therm2-Cwd-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("patch.txt")
+        try Data().write(to: file)
+        let original = Preferences.shared.directoryMode
+        Preferences.shared.directoryMode = .home
+        defer { Preferences.shared.directoryMode = original }
+        let pane = TerminalPane(directory: NSHomeDirectory())
+        pane.startProcess(executable: "/bin/sh", args: ["-c", """
+            cd "$1" || exit 1
+            printf 'READY\n'
+            while :; do sleep 1; done
+            """, "sh", root.path], currentDirectory: NSHomeDirectory())
+        defer { pane.terminate() }
+        try await waitFor("READY", in: pane)
+        #expect(pane.newSessionDirectory == NSHomeDirectory())
+        let resolved = try #require(pane.localLinkResolver?("/patch.txt"))
+        #expect(resolved.resolvingSymlinksInPath() == file.resolvingSymlinksInPath())
+    }
 }

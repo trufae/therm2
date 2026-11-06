@@ -1,0 +1,33 @@
+--- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
++++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+@@ -1750,6 +1750,11 @@
+     /// Controls how link tracking resolves hovered links:
+     /// `.explicit` = OSC 8 only, `.implicit` = explicit + implicit fallback, `.none` = off.
+     public var linkReporting: LinkReporting = .implicit
++
++    /// Resolves scheme-less explicit and detected links using the host's session context.
++    /// Returned file URLs still pass through the normal untrusted-link checks.
++    /// A nil result leaves the target unresolved, without using the app's working directory.
++    public var localLinkResolver: ((String) -> URL?)?
+
+     /// Controls link highlighting and link activation behavior.
+     public var linkHighlightMode: LinkHighlightMode = .hoverWithModifier {
+--- a/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
++++ b/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
+@@ -136,7 +136,15 @@
+         isExplicit: Bool,
+         presentAlert: @escaping TerminalLinkOpening.Presentation = TerminalLinkOpening.present
+     ) {
+-        let target = Self.defaultLinkTarget(link, isExplicit: isExplicit)
++        let target: UntrustedTerminalLink
++        if let localLinkResolver,
++           URL(string: link)?.scheme == nil,
++           !UntrustedTerminalLink.containsUnsafeCharacters(link) {
++            let resolved = localLinkResolver(link).flatMap { $0.isFileURL ? $0.absoluteString : nil }
++            target = UntrustedTerminalLink(resolved ?? link)
++        } else {
++            target = Self.defaultLinkTarget(link, isExplicit: isExplicit)
++        }
+         TerminalLinkOpening.request(target, window: window, presentAlert: presentAlert) { [weak self] url in
+             guard let self, !isExplicit || enableOsc8Hyperlinks else { return }
+             let previous = approvedLinkForDelegate

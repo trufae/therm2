@@ -9,7 +9,7 @@ if [ "$(git -C "$checkout" rev-parse HEAD)" != "$expected" ]; then
     echo 'SwiftTerm revision changed; review the dependency patches before building.' >&2
     exit 1
 fi
-patches="horizontal-scroll foreground-brightness unlimited-scrollback cursor-color"
+patches="horizontal-scroll foreground-brightness unlimited-scrollback cursor-color local-links"
 for name in $patches; do
     patch="$PWD/patches/swiftterm-$name.patch"
     if git -C "$checkout" apply --reverse --check "$patch" 2>/dev/null; then

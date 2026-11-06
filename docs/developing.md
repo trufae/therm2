@@ -21,8 +21,9 @@ dimming and unlimited history. Its cursor-color delegate signature also prevents
 OSC 12 updates from reaching the view. `make`, `make debug`, and `make test` automatically apply the patches for
 [horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
 [foreground brightness](../patches/swiftterm-foreground-brightness.patch),
-[unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch), and
-[cursor colors](../patches/swiftterm-cursor-color.patch) after
+[unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch),
+[cursor colors](../patches/swiftterm-cursor-color.patch), and
+[local link resolution](../patches/swiftterm-local-links.patch) after
 resolution. The preparation is idempotent and fails on an unexpected upstream revision
 or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
 not apply the patches. `make prepare` applies them without building the app.
@@ -31,6 +32,12 @@ Unlimited scrollback grows the history buffer on demand instead of preallocating
 a large fixed limit. Limited mode keeps 0–1,000,000 lines above the visible screen;
 the default is 1,000. Changes apply to existing panes, and reducing the limit
 discards the oldest excess lines. Unlimited history stays in memory for the session.
+
+Local links, including OSC 8 targets, resolve against the pane's current shell directory,
+independently of the new-session directory preference. Existing absolute paths take
+precedence; a missing `/patches/example.patch` also tries `patches/example.patch` under
+that directory. Tilde paths and line/column suffixes are supported. Resolved files still
+pass through SwiftTerm's checks before opening; URLs with schemes keep their usual behavior.
 
 ## Metal renderer
 
@@ -107,5 +114,7 @@ restoring colors when focus changes. Cursor-color checks feed OSC 12 and OSC 112
 through the parser and verify rendered colors and restoration without real-time animation.
 Preferences persistence and bundled font registration are covered. A real PTY test checks directory inheritance without
 OSC 7, matching kernel window size, and SIGWINCH delivery when a pane is split.
+Link tests cover relative and leading-slash paths, absolute-path precedence, pane-local
+resolution, shell directory changes, and preservation of file and URL validation.
 Rendering throughput and resident memory still need profiling on representative
 workloads and displays.
