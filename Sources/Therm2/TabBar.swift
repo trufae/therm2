@@ -15,7 +15,7 @@ final class TabBar: NSView {
         if buttons.count != titles.count {
             buttons.forEach { $0.removeFromSuperview() }
             buttons = titles.indices.map { index in
-                let button = NSButton(title: "", target: self, action: #selector(selectTab(_:)))
+                let button = ClickableButton(title: "", target: self, action: #selector(selectTab(_:)))
                 button.tag = index
                 button.isBordered = false
                 button.controlSize = .mini

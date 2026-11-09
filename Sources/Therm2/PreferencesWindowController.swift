@@ -14,12 +14,12 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     private let directory = NSPopUpButton()
     private let dimming = NSSlider(value: 45, minValue: 0, maxValue: 75, target: nil, action: nil)
     private let dimmingValue = NSTextField(labelWithString: "30%")
-    private let dimBackground = NSButton(checkboxWithTitle: "Dim background", target: nil, action: nil)
-    private let notch = NSButton(checkboxWithTitle: "Ignore notch in fullscreen", target: nil, action: nil)
-    private let nativeFullscreen = NSButton(checkboxWithTitle: "Use native fullscreen", target: nil, action: nil)
-    private let emptyTitle = NSButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
-    private let glassyWindow = NSButton(checkboxWithTitle: "Glassy window", target: nil, action: nil)
-    private let checkForUpdates = NSButton(checkboxWithTitle: "Check for updates on startup", target: nil, action: nil)
+    private let dimBackground = ClickableButton(checkboxWithTitle: "Dim background", target: nil, action: nil)
+    private let notch = ClickableButton(checkboxWithTitle: "Ignore notch in fullscreen", target: nil, action: nil)
+    private let nativeFullscreen = ClickableButton(checkboxWithTitle: "Use native fullscreen", target: nil, action: nil)
+    private let emptyTitle = ClickableButton(checkboxWithTitle: "Use an empty window title", target: nil, action: nil)
+    private let glassyWindow = ClickableButton(checkboxWithTitle: "Glassy window", target: nil, action: nil)
+    private let checkForUpdates = ClickableButton(checkboxWithTitle: "Check for updates on startup", target: nil, action: nil)
     private let preview: PreferencesPreview
 
     init(preferences: Preferences = .shared) {
@@ -177,7 +177,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         preview.widthAnchor.constraint(equalTo: previewStack.widthAnchor).isActive = true
         preview.heightAnchor.constraint(equalToConstant: 100).isActive = true
 
-        let reset = NSButton(title: "Restore Defaults", target: self, action: #selector(resetPreferences))
+        let reset = ClickableButton(title: "Restore Defaults", target: self, action: #selector(resetPreferences))
         reset.bezelStyle = .rounded
         let saved = NSTextField(labelWithString: "Changes are saved automatically.")
         saved.font = .systemFont(ofSize: 11)

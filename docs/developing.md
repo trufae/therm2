@@ -22,8 +22,9 @@ OSC 12 updates from reaching the view. `make`, `make debug`, and `make test` aut
 [horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
 [foreground brightness](../patches/swiftterm-foreground-brightness.patch),
 [unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch),
-[cursor colors](../patches/swiftterm-cursor-color.patch), and
-[local link resolution](../patches/swiftterm-local-links.patch) after
+[cursor colors](../patches/swiftterm-cursor-color.patch),
+[local link resolution](../patches/swiftterm-local-links.patch), and
+[link hover cursors](../patches/swiftterm-link-cursor.patch) after
 resolution. The preparation is idempotent and fails on an unexpected upstream revision
 or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
 not apply the patches. `make prepare` applies them without building the app.
@@ -38,6 +39,7 @@ independently of the new-session directory preference. Existing absolute paths t
 precedence; a missing `/patches/example.patch` also tries `patches/example.patch` under
 that directory. Tilde paths and line/column suffixes are supported. Resolved files still
 pass through SwiftTerm's checks before opening; URLs with schemes keep their usual behavior.
+Activatable links show a pointing hand; modifier-gated links use it while Command is held.
 
 ## Metal renderer
 

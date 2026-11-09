@@ -1,0 +1,80 @@
+--- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
++++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+@@ -1930,13 +1930,22 @@
+     
+     public override func cursorUpdate(with event: NSEvent)
+     {
+-        // AppKit calls this on every mouse move over the view and on every display
+-        // cycle that re-evaluates cursor rects. With a customized pointer (size or
+-        // colour in Accessibility settings) each set() re-renders the cursor image,
+-        // so setting the cursor that is already current is expensive. Skip it.
+-        if NSCursor.current != NSCursor.iBeam {
+-            NSCursor.iBeam.set ()
+-        }
++        updateMouseCursor(at: convert(event.locationInWindow, from: nil),
++                          modifiers: event.modifierFlags)
++    }
++
++    // Share the click policy so the hand only appears when a link can be activated.
++    // In particular, modifier-gated links return to the I-beam when Command is released.
++    func updateMouseCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) {
++        guard visibleRect.contains(point),
++              point.x < getEffectiveWidth(size: bounds.size) else { return }
++        let hit = calculateMouseHit(at: point).grid
++        let command = modifiers.contains(.command)
++        updateHoverLink(at: hit, commandOverride: command)
++        let cursor: NSCursor = linkForClick(at: hit, hasCommandModifier: command) == nil
++            ? .iBeam : .pointingHand
++        // Re-setting a customized accessibility pointer is expensive.
++        if NSCursor.current != cursor { cursor.set() }
+     }
+     
+     func makeFirstResponder ()
+@@ -2050,13 +2059,13 @@
+     func startTracking ()
+     {
+         if tracking == nil {
+-            var options: NSTrackingArea.Options = [.activeAlways, .mouseEnteredAndExited]
++            var options: NSTrackingArea.Options = [.activeAlways, .mouseEnteredAndExited, .cursorUpdate, .inVisibleRect]
+             if #available(macOS 26, *) {
+                 // See the Tahoe WindowServer workaround above.
+             } else {
+                 options.insert(.mouseMoved)
+             }
+-            tracking = NSTrackingArea (rect: frame, options: options, owner: self, userInfo: [:])
++            tracking = NSTrackingArea (rect: .zero, options: options, owner: self, userInfo: [:])
+             addTrackingArea(tracking!)
+         }
+         startWindowMouseMovedFallback()
+@@ -2119,7 +2128,7 @@
+         if commandActive {
+             return true
+         }
+-        if linkHighlightMode == .hover {
++        if linkHighlightMode == .hover || linkHighlightMode == .always {
+             return true
+         }
+         if linkHighlightMode == .hoverWithModifier && commandActive {
+@@ -2177,6 +2186,12 @@
+     // when the Command key is pressed.
+     
+     public override func flagsChanged(with event: NSEvent) {
++        defer {
++            if let window {
++                updateMouseCursor(at: convert(window.mouseLocationOutsideOfEventStream, from: nil),
++                                  modifiers: event.modifierFlags)
++            }
++        }
+         if event.modifierFlags.contains(.command){
+             commandActive = true
+             startTracking()
+@@ -4561,7 +4576,8 @@
+             }
+             reportLink(at: hit.grid)
+         }
+-        updateHoverLink(at: hit.grid)
++        updateMouseCursor(at: convert(event.locationInWindow, from: nil),
++                          modifiers: event.modifierFlags)
+         
+         if withTerminal({ $0.mouseMode.sendMotionEvent() }) {
+             let flags = encodeMouseEvent(with: event, overwriteRelease: true)
