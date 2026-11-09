@@ -19,8 +19,8 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     var isPaneMaximized: Bool { maximizedPlaceholder != nil }
     var displayedView: NSView { maximizedPlaceholder?.paneView ?? root }
 
-    convenience init(directory: String) {
-        self.init(pane: TerminalPane(directory: directory))
+    convenience init(directory: String, command: LaunchCommand? = nil) {
+        self.init(pane: TerminalPane(directory: directory, command: command))
     }
 
     private init(pane: TerminalPane) {

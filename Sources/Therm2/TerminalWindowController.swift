@@ -104,8 +104,9 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     required init?(coder: NSCoder) { fatalError("Use init()") }
 
-    func newTab() {
-        let tab = TerminalTab(directory: selectedTab?.activePane.newSessionDirectory ?? NSHomeDirectory())
+    func newTab(command: LaunchCommand? = nil) {
+        let directory = command?.directory ?? selectedTab?.activePane.newSessionDirectory ?? NSHomeDirectory()
+        let tab = TerminalTab(directory: directory, command: command)
         tab.controller = self
         tabs.append(tab)
         selectTab(at: tabs.count - 1)

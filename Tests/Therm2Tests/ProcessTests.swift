@@ -20,6 +20,58 @@ struct ProcessTests {
         }
     }
 
+    @Test func launchCommandRunsInPTYWithLiteralArgumentsAndClosesItsPane() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Therm2-Command-" + UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data().write(to: root.appendingPathComponent("cwd-marker"))
+        let command = try #require(try LaunchCommand.parse(["-e", "sh", "-c", """
+            test -t 0 && test -t 1 && printf 'PTY_OK\n'
+            printf 'ARG:<%s>\n' "$@"
+            test -f cwd-marker && printf 'CWD_OK\n'
+            printf 'TERM:<%s>\n' "$TERM"
+            printf 'READY\n'
+            read -r line
+            """, "sh", "two words", "", "$HOME; * | >", "-e"], directory: root.path, path: "/bin"))
+        let controller = TerminalWindowController()
+        defer { controller.window?.close() }
+        controller.newTab(command: command)
+        let pane = try #require(controller.selectedTab?.activePane)
+        try await waitFor("READY", in: pane)
+        let output = String(decoding: pane.getBufferAsData(), as: UTF8.self)
+        #expect(output.contains("PTY_OK"))
+        for argument in ["two words", "", "$HOME; * | >", "-e"] {
+            #expect(output.contains("ARG:<\(argument)>"))
+        }
+        #expect(output.contains("CWD_OK"))
+        #expect(output.contains("TERM:<xterm-256color>"))
+
+        // A new split and tab must run the login shell, not repeat the command.
+        let firstTab = try #require(controller.selectedTab)
+        controller.split(vertical: true)
+        let sibling = firstTab.activePane
+        #expect(sibling !== pane)
+        #expect(sibling.process.running)
+        sibling.send(txt: "printf 'SHELL_%s\\n' 'SPLIT'\n")
+        try await waitFor("SHELL_SPLIT", in: sibling)
+        firstTab.close(sibling)
+        controller.newTab()
+        let newPane = try #require(controller.selectedTab?.activePane)
+        #expect(newPane !== pane)
+        #expect(newPane.process.running)
+        newPane.send(txt: "printf 'SHELL_%s\\n' 'TAB'\n")
+        try await waitFor("SHELL_TAB", in: newPane)
+
+        pane.send(txt: "done\n")
+        let deadline = ContinuousClock.now + .seconds(5)
+        while controller.tabs.contains(where: { $0 === firstTab }), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(controller.tabs.count == 1)
+        #expect(controller.selectedTab?.activePane === newPane)
+        #expect(!pane.process.running)
+    }
+
     @Test func splitInheritsActualShellDirectoryAndNotifiesItsProcessOfResize() async throws {
         let tab = TerminalTab(directory: NSHomeDirectory())
         tab.root.frame = NSRect(x: 0, y: 0, width: 960, height: 600)

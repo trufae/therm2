@@ -21,6 +21,31 @@ releases page. Disable “Check for updates on startup” in Preferences to turn
 - Native preferences: colors, font, border margin, glassy window, dimming, start directory
 - Bundled retro fonts, registered for this app only
 - New tabs and splits inherit the active shell's directory
+- Run a command with `Therm2 -e command [args...]`
+
+## Run a command
+
+Launch the app's executable with `-e`, like `xterm -e`:
+
+```sh
+/Applications/Therm2.app/Contents/MacOS/Therm2 -e top
+build/Therm2.app/Contents/MacOS/Therm2 -e ssh user@host
+```
+
+The command runs in the caller's working directory, using its `PATH`. Everything
+after `-e` is passed directly to the command. For pipes, redirections, or other
+shell syntax, explicitly run a shell:
+
+```sh
+/Applications/Therm2.app/Contents/MacOS/Therm2 -e /bin/sh -c 'ls -la | less'
+```
+
+The pane closes when the command exits. An instance launched with `-e` quits when
+its last window closes. Additional tabs, splits, and windows start your normal
+login shell. Launching without `-e` keeps the usual behavior.
+
+You can also use `open -na Therm2 --args -e top` to launch a separate instance;
+invoke the executable directly when the caller's directory and environment matter.
 
 ## Design
 

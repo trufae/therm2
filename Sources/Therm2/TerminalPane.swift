@@ -11,6 +11,7 @@ final class TerminalPane: LocalProcessTerminalView {
     private(set) var title = ""
     private(set) var directory: String
     private(set) var started = false
+    private let command: LaunchCommand?
     private var pinchFontSize: CGFloat?
     private var stopped = false
     var layoutView: NSView { superview as? TerminalPaneFrame ?? self }
@@ -25,8 +26,9 @@ final class TerminalPane: LocalProcessTerminalView {
         return WorkingDirectory.valid(directory) ? directory : NSHomeDirectory()
     }
 
-    init(directory: String) {
+    init(directory: String, command: LaunchCommand? = nil) {
         self.directory = directory
+        self.command = command
         var options = TerminalOptions.default
         options.scrollback = Preferences.shared.scrollbackSize
         options.cursorStyle = .steadyBlock
@@ -35,6 +37,7 @@ final class TerminalPane: LocalProcessTerminalView {
         options.enableSixelReported = false
         super.init(frame: NSRect(x: 0, y: 0, width: 800, height: 500),
                    font: Preferences.shared.font(size: Self.defaultFontSize), options: options)
+        if let command { updateTitle(URL(fileURLWithPath: command.name).lastPathComponent) }
         nativeBackgroundColor = Preferences.shared.terminalBackgroundColor
         nativeForegroundColor = NSColor(white: 0.86, alpha: 1)
         caretColor = NSColor(white: 0.86, alpha: 1)
@@ -132,8 +135,9 @@ final class TerminalPane: LocalProcessTerminalView {
             do { try setUseMetal(true) }
             catch { NSLog("Metal unavailable, using Core Graphics: %@", String(describing: error)) }
         }
-        startProcess(executable: Self.shell, environment: Self.environment,
-                     execName: "-" + URL(fileURLWithPath: Self.shell).lastPathComponent,
+        startProcess(executable: command?.executable ?? Self.shell,
+                     args: command?.arguments ?? [], environment: Self.environment,
+                     execName: command?.name ?? "-" + URL(fileURLWithPath: Self.shell).lastPathComponent,
                      currentDirectory: directory)
     }
 
@@ -160,7 +164,7 @@ final class TerminalPane: LocalProcessTerminalView {
         values["TERM_PROGRAM_VERSION"] = "0.1.0"
         values["SHELL"] = shell
         values["HOME"] = NSHomeDirectory()
-        if values["PATH"] == nil { values["PATH"] = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin" }
+        if values["PATH"] == nil { values["PATH"] = LaunchCommand.defaultPath }
         if values["LANG"] == nil { values["LANG"] = "en_US.UTF-8" }
         // Parent terminal identity must not leak into the new PTY.
         for key in ["TERM_SESSION_ID", "ITERM_SESSION_ID", "WINDOWID", "TMUX", "STY"] {
@@ -188,7 +192,7 @@ final class TerminalPane: LocalProcessTerminalView {
 
     func showLaunchError(_ error: LocalProcessError) {
         title = "Launch failed"
-        feed(text: "\r\nCould not start \(Self.shell): \(error)\r\nPress ⌘W to close this pane.\r\n")
+        feed(text: "\r\nCould not start \(command?.name ?? Self.shell): \(error)\r\nPress ⌘W to close this pane.\r\n")
         tab?.controller?.refreshChrome()
     }
 }

@@ -2,12 +2,18 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
+    private let command: LaunchCommand?
     private var windows: [ObjectIdentifier: TerminalWindowController] = [:]
     private var preferencesWindow: PreferencesWindowController?
     private var presentationUpdatePending = false
     private var current: TerminalWindowController? {
         (NSApp.keyWindow?.windowController as? TerminalWindowController)
             ?? (NSApp.mainWindow?.windowController as? TerminalWindowController)
+    }
+
+    init(command: LaunchCommand? = nil) {
+        self.command = command
+        super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -18,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             preferencesWindow?.refresh()
         }
         buildMenu()
-        newWindow(nil)
+        openWindow(command: command)
         NSApp.activate(ignoringOtherApps: true)
         UpdateChecker.checkOnStartup()
     }
@@ -26,6 +32,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         if !flag { newWindow(nil) }
         return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        command != nil
     }
 
     func applicationDidBecomeActive(_ notification: Notification) { updatePresentation() }
@@ -62,12 +72,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc private func newWindow(_ sender: Any?) {
+        openWindow()
+    }
+
+    private func openWindow(command: LaunchCommand? = nil) {
         let controller = TerminalWindowController()
         let id = ObjectIdentifier(controller)
         windows[id] = controller
         controller.onClose = { [weak self] in self?.windows.removeValue(forKey: id) }
         controller.showWindow(nil)
-        controller.newTab()
+        controller.newTab(command: command)
     }
 
     @objc private func newTab(_ sender: Any?) {
