@@ -539,26 +539,56 @@ struct LayoutTests {
         tab.close(third)
         #expect(tab.root === first.layoutView)
         #expect(first.frame == tab.root.bounds.insetBy(dx: 12, dy: 12))
-        #expect(SplitView.minimumSize(of: tab.root) == NSSize(width: 184, height: 114))
+        #expect(SplitView.minimumSize(of: tab.root) == NSSize(width: 1, height: 1))
     }
 
-    @Test func panesCannotBeSplitBelowMinimumSize() {
+    @Test(arguments: [CGFloat(0), CGFloat(12)])
+    func panesCanBeSplitDownToOnePoint(margin: CGFloat) throws {
+        let preferences = Preferences.shared
+        let original = preferences.borderMargin
+        preferences.borderMargin = margin
+        defer { preferences.borderMargin = original }
         let tab = tab()
-        tab.root.frame.size = NSSize(width: 320, height: 180)
+        tab.root.frame.size = NSSize(width: 2, height: 2)
         #expect(tab.split(vertical: true) == nil)
         #expect(tab.split(vertical: false) == nil)
         #expect(tab.panes.count == 1)
+
+        tab.root.frame.size = NSSize(width: 3, height: 3)
+        let first = tab.activePane
+        _ = try #require(tab.split(vertical: true))
+        _ = try #require(tab.split(vertical: false))
+        tab.focus(first)
+        _ = try #require(tab.split(vertical: false))
+        #expect(tab.panes.count == 4)
+        for pane in tab.panes {
+            #expect(pane.layoutView.frame.size == NSSize(width: 1, height: 1))
+            #expect(pane.frame.size == NSSize(width: 1, height: 1))
+            tab.focus(pane)
+            #expect(tab.split(vertical: true) == nil)
+            #expect(tab.split(vertical: false) == nil)
+        }
+        #expect(tab.panes.count == 4)
     }
 
-    @Test func dividerMovementRespectsNestedMinimumSizes() throws {
+    @Test(arguments: [false, true])
+    func dividerMovementRespectsNestedMinimumSizes(vertical: Bool) throws {
         let tab = tab()
-        _ = try #require(tab.split(vertical: true))
+        let first = tab.activePane
+        _ = try #require(tab.split(vertical: vertical))
         let split = try #require(tab.root as? SplitView)
-        tab.resizeSplit(vertical: true, by: -10_000)
-        #expect(split.subviews[0].frame.width >= 160)
-        tab.resizeSplit(vertical: true, by: 10_000)
-        #expect(split.subviews[1].frame.width >= 160)
-        #expect(SplitView.minimumSize(of: split) == NSSize(width: 321, height: 90))
+        _ = try #require(tab.split(vertical: vertical))
+        tab.focus(first)
+        tab.resizeSplit(vertical: vertical, by: -10_000)
+        #expect((vertical ? first.layoutView.frame.width : first.layoutView.frame.height) == 1)
+        tab.resizeSplit(vertical: vertical, by: 10_000)
+        let nested = split.subviews[1]
+        #expect((vertical ? nested.frame.width : nested.frame.height) == 3)
+        for view in nested.subviews {
+            #expect((vertical ? view.frame.width : view.frame.height) == 1)
+        }
+        #expect(SplitView.minimumSize(of: split) ==
+                (vertical ? NSSize(width: 5, height: 1) : NSSize(width: 1, height: 5)))
     }
 
     @Test func focusCyclesInBothDirections() throws {

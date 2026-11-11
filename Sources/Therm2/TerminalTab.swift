@@ -264,14 +264,14 @@ final class SplitView: NSSplitView, NSSplitViewDelegate {
 
     static func minimumSize(of view: NSView) -> NSSize {
         guard let split = view as? SplitView else {
-            let margin = Preferences.shared.borderMargin * 2
-            return NSSize(width: 160 + margin, height: 90 + margin)
+            // Border margins shrink with the pane, leaving one point for the terminal.
+            return NSSize(width: 1, height: 1)
         }
         let sizes = split.subviews.map { minimumSize(of: $0) }
         if split.isVertical {
-            return NSSize(width: sizes.reduce(1) { $0 + $1.width }, height: sizes.map(\.height).max() ?? 90)
+            return NSSize(width: sizes.reduce(1) { $0 + $1.width }, height: sizes.map(\.height).max() ?? 1)
         }
-        return NSSize(width: sizes.map(\.width).max() ?? 160, height: sizes.reduce(1) { $0 + $1.height })
+        return NSSize(width: sizes.map(\.width).max() ?? 1, height: sizes.reduce(1) { $0 + $1.height })
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat,
