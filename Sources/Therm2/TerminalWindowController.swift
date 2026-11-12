@@ -69,6 +69,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     private let content = NSView()
     private let titlebarBackground = NSView()
     private var glassView: NSView?
+    private var contentLayoutObservation: NSKeyValueObservation?
     var onClose: (() -> Void)?
     var selectedTab: TerminalTab? { tabs.indices.contains(selectedIndex) ? tabs[selectedIndex] : nil }
     var isAlwaysOnTop: Bool { window?.level == .floating }
@@ -98,6 +99,12 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         window.center()
         content.addSubview(tabBar)
         tabBar.onSelect = { [weak self] index in self?.selectTab(at: index) }
+        // AppKit settles the titlebar layout after ordering the first window.
+        // That can change contentLayoutRect without resizing the window itself.
+        // Wait until its view geometry has settled before converting coordinates.
+        contentLayoutObservation = window.observe(\.contentLayoutRect) { [weak self] _, _ in
+            DispatchQueue.main.async { [weak self] in self?.layoutContent() }
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
@@ -364,6 +371,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         (NSApp.delegate as? AppDelegate)?.updatePresentation()
     }
     func windowWillClose(_ notification: Notification) {
+        contentLayoutObservation = nil
         NotificationCenter.default.removeObserver(self)
         tabs.forEach { $0.stop() }
         tabs.removeAll()

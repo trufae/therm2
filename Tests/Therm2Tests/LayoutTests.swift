@@ -13,6 +13,48 @@ struct LayoutTests {
     }
 
     @Test(arguments: [false, true])
+    func firstPaneFollowsDeferredWindowLayoutWithEmptyTitle(glassy: Bool) async throws {
+        let preferences = Preferences.shared
+        let originalGlass = preferences.glassyWindow
+        let originalTitle = preferences.emptyWindowTitle
+        preferences.glassyWindow = glassy
+        preferences.emptyWindowTitle = true
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer {
+            window.close()
+            preferences.glassyWindow = originalGlass
+            preferences.emptyWindowTitle = originalTitle
+        }
+        // Match app startup. No OSC title or later tab/split can repair the layout.
+        let command = try LaunchCommand.parse(["-e", "/bin/sh", "-c", "printf 'FIRST_PROMPT> '; read -r line"])
+        controller.showWindow(nil)
+        controller.newTab(command: command)
+        let tab = try #require(controller.selectedTab)
+        let pane = tab.activePane
+        window.contentView?.superview?.layoutSubtreeIfNeeded()
+        window.displayIfNeeded()
+        func hasPrompt() -> Bool {
+            String(decoding: pane.getBufferAsData(), as: UTF8.self).contains("FIRST_PROMPT> ")
+        }
+        let deadline = ContinuousClock.now + .seconds(3)
+        while (pane.frame.height <= 0 || !hasPrompt()), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(hasPrompt())
+        let host = try #require(tab.displayedView.superview)
+        let usable = host.convert(window.contentLayoutRect, from: nil)
+        #expect(usable.height > 0)
+        #expect(tab.displayedView.frame.maxY == usable.maxY)
+        #expect(pane.frame.height > 0)
+        #expect(pane.terminalDimensions.rows > 1)
+        #expect(window.firstResponder === pane)
+        #expect(controller.tabs.count == 1)
+        #expect(tab.panes.count == 1)
+    }
+
+    @Test(arguments: [false, true])
     func accentChangesRepaintExistingDividersAcrossTabs(glassy: Bool) throws {
         let preferences = Preferences.shared
         let originalAccent = preferences.accentColor
