@@ -179,9 +179,15 @@ struct DropTests {
     }
 
     private final class Promise: NSFilePromiseReceiver {
+        // AppKit invokes this unannotated callback on the supplied operation queue.
+        private struct Reader: @unchecked Sendable {
+            let callback: (URL, Error?) -> Void
+        }
+
         let names: [String]
         var destination: URL?
-        var reader: ((URL, Error?) -> Void)?
+        private var reader: Reader?
+        private var queue: OperationQueue?
         override var fileNames: [String] { destination == nil ? [] : names }
 
         init(_ names: [String]) { self.names = names; super.init() }
@@ -194,17 +200,27 @@ struct DropTests {
                                           operationQueue: OperationQueue,
                                           reader: @escaping (URL, Error?) -> Void) {
             destination = destinationDir
-            self.reader = reader
+            self.reader = Reader(callback: reader)
+            queue = operationQueue
         }
 
-        func finish(error: Error? = nil) throws {
+        @MainActor func finish(error: Error? = nil) async throws {
             let destination = try #require(destination)
-            for name in names {
+            let reader = try #require(reader)
+            let queue = try #require(queue)
+            self.reader = nil
+            let files = try names.map { name in
                 let file = destination.appendingPathComponent(name)
                 if error == nil { try Data("promised image".utf8).write(to: file) }
-                reader?(file, error)
+                return file
             }
-            reader = nil
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                queue.addOperation {
+                    #expect(!Thread.isMainThread)
+                    for file in files { reader.callback(file, error) }
+                    continuation.resume()
+                }
+            }
         }
     }
 
@@ -216,10 +232,10 @@ struct DropTests {
         let directory = try #require(first.destination)
         defer { try? FileManager.default.removeItem(at: directory) }
         #expect(second.destination == directory)
-        try second.finish()
+        try await second.finish()
         await flushOutput()
         #expect(results.isEmpty)
-        try first.finish()
+        try await first.finish()
         await flushOutput()
         #expect(results.count == 1)
         let files = (first.names + second.names).map { directory.appendingPathComponent($0) }
@@ -234,8 +250,8 @@ struct DropTests {
         try TerminalDrop.receivePromises([first, second]) { results.append($0) }
         let directory = try #require(first.destination)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try second.finish(error: CocoaError(.fileWriteNoPermission))
-        try first.finish()
+        try await second.finish(error: CocoaError(.fileWriteNoPermission))
+        try await first.finish()
         await flushOutput()
         #expect(results.count == 1)
         #expect(throws: CocoaError.self) { try results.first?.get() }

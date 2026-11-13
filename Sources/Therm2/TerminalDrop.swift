@@ -99,7 +99,9 @@ enum TerminalDrop {
         func receive(at directory: URL) {
             for (index, receiver) in receivers.enumerated() {
                 receiver.receivePromisedFiles(atDestination: directory, options: [:], operationQueue: queue) {
-                    [self] url, error in
+                    @Sendable [self] url, error in
+                    // AppKit calls on the operation queue. Do not inherit MainActor isolation:
+                    // that would trap before the callback can dispatch to the main queue.
                     // Retain the receivers until delivery and marshal all state back to AppKit.
                     DispatchQueue.main.async { self.received(url, error: error, index: index) }
                 }
