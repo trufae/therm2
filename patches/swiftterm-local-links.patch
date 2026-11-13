@@ -14,20 +14,20 @@
      public var linkHighlightMode: LinkHighlightMode = .hoverWithModifier {
 --- a/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
 +++ b/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
-@@ -136,7 +136,15 @@
-         isExplicit: Bool,
-         presentAlert: @escaping TerminalLinkOpening.Presentation = TerminalLinkOpening.present
-     ) {
--        let target = Self.defaultLinkTarget(link, isExplicit: isExplicit)
+@@ -172,7 +172,15 @@
+         if !resolvesLinksAgainstShellDirectory, pathBase != .remote {
+             pathBase = .processDirectory
+         }
+-        let target = Self.defaultLinkTarget(link, isExplicit: isExplicit, pathBase: pathBase)
 +        let target: UntrustedTerminalLink
 +        if let localLinkResolver,
-+           URL(string: link)?.scheme == nil,
++           !Self.hasURLScheme(link),
 +           !UntrustedTerminalLink.containsUnsafeCharacters(link) {
 +            let resolved = localLinkResolver(link).flatMap { $0.isFileURL ? $0.absoluteString : nil }
 +            target = UntrustedTerminalLink(resolved ?? link)
 +        } else {
-+            target = Self.defaultLinkTarget(link, isExplicit: isExplicit)
++            target = Self.defaultLinkTarget(link, isExplicit: isExplicit, pathBase: pathBase)
 +        }
          TerminalLinkOpening.request(target, window: window, presentAlert: presentAlert) { [weak self] url in
-             guard let self, !isExplicit || enableOsc8Hyperlinks else { return }
-             let previous = approvedLinkForDelegate
+             guard let self, allowsLink(isExplicit: isExplicit) else { return }
+             approved(url)

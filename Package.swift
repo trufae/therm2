@@ -6,7 +6,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.executable(name: "Therm2", targets: ["Therm2"])],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.99.2", traits: [])
+        .package(url: "https://github.com/migueldeicaza/SwiftTerm.git", exact: "1.99.3", traits: [])
     ],
     targets: [
         .executableTarget(name: "Therm2", dependencies: ["SwiftTerm"]),

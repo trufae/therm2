@@ -1,9 +1,9 @@
 import Foundation
 
 enum TerminalLink {
-    /// Resolve existing paths before SwiftTerm applies its file-opening policy.
+    /// Resolve paths classified by SwiftTerm before it applies its file-opening policy.
     static func fileURL(_ link: String, directory: String) -> URL? {
-        guard !link.isEmpty, URL(string: link)?.scheme == nil else { return nil }
+        guard !link.isEmpty else { return nil }
         let path = NSString(string: link).expandingTildeInPath
         var paths = [path]
         // Preserve literal filenames first, then try without a source location.

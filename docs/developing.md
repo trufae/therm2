@@ -16,7 +16,7 @@ Distribution builds need your own Developer ID signature and notarization.
 
 ## Dependency patches
 
-The pinned SwiftTerm release ignores horizontal wheel deltas and lacks foreground-only
+The pinned SwiftTerm 1.99.3 release ignores horizontal wheel deltas and lacks foreground-only
 dimming and unlimited history. Its cursor-color delegate signature also prevents
 OSC 12 updates from reaching the view. `make`, `make debug`, and `make test` automatically apply the patches for
 [horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
@@ -28,6 +28,16 @@ OSC 12 updates from reaching the view. `make`, `make debug`, and `make test` aut
 resolution. The preparation is idempotent and fails on an unexpected upstream revision
 or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
 not apply the patches. `make prepare` applies them without building the app.
+
+All six patches were reviewed against 1.99.3; none is fully covered upstream.
+Horizontal scrolling, unlimited scrollback, cursor colors, and link hover cursors
+apply unchanged. The brightness patch preserves upstream's correction that explicit
+underline colors do not become bright when text is bold. The local-link patch now
+runs in `checkLink`, so the new `TerminalLinkRequest` delegate receives the original
+target and deferred `openDefault()` calls use the current pane directory. SwiftTerm's
+path classification distinguishes `source.swift:12` from numeric URLs such as `tel:5551234`.
+Upstream's OSC 7 resolution does not replace Therm2's actual PTY directory lookup,
+leading-slash fallback, or resolution of relative OSC 8 targets.
 
 Unlimited scrollback grows the history buffer on demand instead of preallocating
 a large fixed limit. Limited mode keeps 0–1,000,000 lines above the visible screen;
@@ -117,6 +127,8 @@ through the parser and verify rendered colors and restoration without real-time 
 Preferences persistence and bundled font registration are covered. A real PTY test checks directory inheritance without
 OSC 7, matching kernel window size, and SIGWINCH delivery when a pane is split.
 Link tests cover relative and leading-slash paths, absolute-path precedence, pane-local
-resolution, shell directory changes, and preservation of file and URL validation.
+resolution, shell directory changes, deferred link requests, source-location suffixes,
+and preservation of file and URL validation. Rendering checks also exercise bold white
+and explicit underline colors with dimming in both shaped and plain text paths.
 Rendering throughput and resident memory still need profiling on representative
 workloads and displays.

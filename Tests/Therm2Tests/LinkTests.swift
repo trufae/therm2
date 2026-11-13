@@ -8,8 +8,12 @@ struct LinkTests {
     init() { _ = NSApplication.shared }
 
     private final class Recorder: TerminalViewDelegate {
-        var links: [String] = []
-        func requestOpenLink(source: TerminalView, link: String, params: [String: String]) { links.append(link) }
+        var requests: [TerminalLinkRequest] = []
+        var opensImmediately = true
+        func requestOpenLink(source: TerminalView, request: TerminalLinkRequest) {
+            requests.append(request)
+            if opensImmediately { request.openDefault() }
+        }
         func send(source: TerminalView, data: ArraySlice<UInt8>) {}
         func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {}
         func setTerminalTitle(source: TerminalView, title: String) {}
@@ -34,18 +38,19 @@ struct LinkTests {
     /// Exercise the actual validation/dispatch path without launching another app or showing a modal.
     private func activate(_ link: String, in pane: TerminalPane, explicit: Bool = true,
                           response: NSApplication.ModalResponse = .alertFirstButtonReturn) async
-        -> (links: [String], alerts: [String]) {
+        -> (links: [String], alerts: [String], requests: [String]) {
         let recorder = Recorder()
         pane.terminalDelegate = recorder
+        var links: [String] = []
         var alerts: [String] = []
-        pane.activateLink(link, params: [:], isExplicit: explicit) { alert, _, completion in
+        pane.activateLink(link, params: [:], isExplicit: explicit, presentAlert: { alert, _, completion in
             alerts.append(alert.messageText)
             completion(response)
-        }
+        }, open: { links.append($0.absoluteString) })
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             DispatchQueue.main.async { continuation.resume() }
         }
-        return (recorder.links, alerts)
+        return (links, alerts, recorder.requests.map(\.link))
     }
 
     private func canonical(_ url: URL) -> String {
@@ -59,6 +64,8 @@ struct LinkTests {
         let patch = try file("patches/swiftterm-cursor-color.patch", in: root)
         let spaced = try file("patches/a patch.patch", in: root)
         let literal = try file("patches/source.swift:42", in: root)
+        let source = try file("source.swift", in: root)
+        let literalBasename = try file("source.swift:42", in: root)
         let pane = TerminalPane(directory: root.path)
         for (link, expected) in [
             ("patches/swiftterm-cursor-color.patch", patch),
@@ -67,11 +74,15 @@ struct LinkTests {
             ("/patches/swiftterm-cursor-color.patch:12:4", patch),
             ("patches/a patch.patch", spaced),
             ("patches/source.swift:42", literal),
+            ("source.swift:12", source),
+            ("source.swift:12:4", source),
+            ("source.swift:42", literalBasename),
             ("patches", patch.deletingLastPathComponent()),
         ] {
             let result = await activate(link, in: pane, explicit: explicit)
             #expect(result.links == [canonical(expected)])
             #expect(result.alerts.isEmpty)
+            #expect(result.requests == [link])
         }
     }
 
@@ -131,17 +142,48 @@ struct LinkTests {
         #expect(result.alerts == ["Link blocked"])
     }
 
-    @Test func webAndCustomSchemesKeepTheirUsualPolicy() async {
-        let pane = TerminalPane(directory: NSTemporaryDirectory())
+    @Test func webAndCustomSchemesKeepTheirUsualPolicy() async throws {
+        let root = try directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        // A numeric URL target must not be mistaken for a filename with a line number.
+        _ = try file("tel:5551234", in: root)
+        let pane = TerminalPane(directory: root.path)
         for link in ["https://example.com/patches/fix.patch", "mailto:example@example.com"] {
             let result = await activate(link, in: pane)
             #expect(result.links == [link])
             #expect(result.alerts.isEmpty)
         }
-        let cancelled = await activate("ssh://example.com", in: pane)
-        #expect(cancelled.links.isEmpty)
-        #expect(cancelled.alerts == ["Open link from terminal output?"])
-        let confirmed = await activate("ssh://example.com", in: pane, response: .alertSecondButtonReturn)
-        #expect(confirmed.links == ["ssh://example.com"])
+        for link in ["ssh://example.com", "tel:5551234"] {
+            let cancelled = await activate(link, in: pane)
+            #expect(cancelled.links.isEmpty)
+            #expect(cancelled.alerts == ["Open link from terminal output?"])
+            let confirmed = await activate(link, in: pane, response: .alertSecondButtonReturn)
+            #expect(confirmed.links == [link])
+        }
+    }
+
+    @Test func deferredRequestsUseCurrentDirectoryAndHonorDisabledOSC8() throws {
+        let root = try directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        _ = try file("first/source.swift", in: root)
+        let second = try file("second/source.swift", in: root)
+        let pane = TerminalPane(directory: root.appendingPathComponent("first").path)
+        let recorder = Recorder()
+        recorder.opensImmediately = false
+        pane.terminalDelegate = recorder
+        var links: [String] = []
+        pane.activateLink("source.swift:12", params: ["id": "source"], isExplicit: true,
+                          open: { links.append($0.absoluteString) })
+        let request = try #require(recorder.requests.first)
+        #expect(request.link == "source.swift:12")
+        #expect(request.params == ["id": "source"])
+        #expect(request.isExplicit)
+        #expect(links.isEmpty)
+        pane.updateDirectory(second.deletingLastPathComponent().absoluteString)
+        request.openDefault()
+        #expect(links == [canonical(second)])
+        pane.enableOsc8Hyperlinks = false
+        request.openDefault()
+        #expect(links.count == 1)
     }
 }

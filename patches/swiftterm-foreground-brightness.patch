@@ -129,7 +129,7 @@
 @@ -365,6 +368,7 @@
          if flags.contains(.underline) {
              let color = attribute.underlineColor.map {
-                 mapColor(color: $0, isFg: true, isBold: isBold, context: context)
+                 mapColor(color: $0, isFg: true, isBold: false, context: context)
 +                    .withBrightness(context.foregroundBrightness)
              } ?? foregroundColor
              let variant = attribute.underlineStyle == .none ? UnderlineStyle.single : attribute.underlineStyle
@@ -150,8 +150,8 @@
          }
          if flags.contains(.underline) {
              let color = attribute.underlineColor.map {
--                plainColor($0, isFg: true, isBold: isBold, context: context)
-+                brightnessColor(plainColor($0, isFg: true, isBold: isBold, context: context), context: context)
+-                plainColor($0, isFg: true, isBold: false, context: context)
++                brightnessColor(plainColor($0, isFg: true, isBold: false, context: context), context: context)
              } ?? foregroundColor
              let variant = attribute.underlineStyle == .none ? UnderlineStyle.single : attribute.underlineStyle
              style.underline = PlainUnderline(color: color,

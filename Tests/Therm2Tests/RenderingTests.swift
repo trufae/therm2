@@ -161,6 +161,44 @@ struct RenderingTests {
         #expect(brightContext.identity != dimContext.identity)
     }
 
+    @Test(arguments: [false, true])
+    func dimmingPreservesBoldWhiteAndExplicitUnderlineColors(plain: Bool) throws {
+        let pane = TerminalPane(directory: NSTemporaryDirectory())
+        pane.useBrightColors = true
+        pane.feed(text: "\u{1b}[1;4;37;58;5;7mA")
+
+        func colors() throws -> (foreground: NSColor, underline: NSColor) {
+            let (snapshot, context) = try self.context(pane)
+            let row = try #require(snapshot.rows.first)
+            if plain {
+                let run = try #require(pane.textBuilder.plainRow(row: row, absoluteRow: snapshot.firstRow,
+                                                               context: context)?.runs.first)
+                let underline = try #require(run.style.underline)
+                return (pane.textBuilder.platformColor(run.style.foreground, context: context),
+                        pane.textBuilder.platformColor(underline.color, context: context))
+            }
+            let rendered = pane.textBuilder.buildAttributedString(row: row, absoluteRow: snapshot.firstRow,
+                                                                  context: context)
+            let text = try #require(rendered.segments.first?.attributedString)
+            let attributes = text.attributes(at: 0, effectiveRange: nil)
+            return (try #require(attributes[.foregroundColor] as? NSColor),
+                    try #require(attributes[.underlineColor] as? NSColor))
+        }
+
+        let (_, context) = try self.context(pane)
+        let bright = try colors()
+        #expect(try components(bright.foreground) == components(context.ansiColors[15]))
+        #expect(try components(bright.underline) == components(context.ansiColors[7]))
+        pane.setFocused(false)
+        let dimmed = try colors()
+        try expectDimmed(dimmed.foreground, original: bright.foreground)
+        try expectDimmed(dimmed.underline, original: bright.underline)
+        pane.setFocused(true)
+        let restored = try colors()
+        #expect(restored.foreground == bright.foreground)
+        #expect(restored.underline == bright.underline)
+    }
+
     @Test func glassKeepsTextAndExplicitANSIBackgroundsOpaque() throws {
         let preferences = Preferences.shared
         let original = preferences.glassyWindow
