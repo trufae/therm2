@@ -87,6 +87,16 @@
          var nsattr: [NSAttributedString.Key:Any] = [
              .font: tf,
              .foregroundColor: fgColor,
+--- a/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
++++ b/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
+@@ -173,6 +173,7 @@
+         useBrightColors = view.useBrightColors
+         collapseBrightColorsToBase = view.collapseBrightColorsToBase
+         minimumContrastRatio = view.minimumContrastRatio
++        foregroundBrightness = 1
+         bidiHostPolicy = view.bidiHostPolicy
+         glyphFallbackProvider = view.glyphFallbackProvider
+     }
 --- a/Sources/SwiftTerm/Apple/ColorContrast+Apple.swift
 +++ b/Sources/SwiftTerm/Apple/ColorContrast+Apple.swift
 @@ -19,6 +19,13 @@

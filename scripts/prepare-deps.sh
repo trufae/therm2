@@ -4,12 +4,12 @@ cd "$(dirname "$0")/.."
 scratch=${THERM2_BUILD_PATH:-.build}
 swift package --scratch-path "$scratch" resolve "$@"
 checkout="$scratch/checkouts/SwiftTerm"
-expected=282c3c3a932b55c129628876b70f37d993af1615
+expected=b30669619244453a66b14a6b10ec859e3016d6fd
 if [ "$(git -C "$checkout" rev-parse HEAD)" != "$expected" ]; then
     echo 'SwiftTerm revision changed; review the dependency patches before building.' >&2
     exit 1
 fi
-patches="horizontal-scroll foreground-brightness unlimited-scrollback cursor-color local-links link-cursor"
+patches="horizontal-scroll foreground-brightness unlimited-scrollback local-links link-cursor"
 for name in $patches; do
     patch="$PWD/patches/swiftterm-$name.patch"
     if git -C "$checkout" apply --reverse --check "$patch" 2>/dev/null; then

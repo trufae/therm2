@@ -1,36 +1,78 @@
+diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+index 10a9f69..b0ebf42 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -1930,13 +1930,22 @@
+@@ -2051,7 +2051,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      
      public override func cursorUpdate(with event: NSEvent)
      {
--        // AppKit calls this on every mouse move over the view and on every display
--        // cycle that re-evaluates cursor rects. With a customized pointer (size or
--        // colour in Accessibility settings) each set() re-renders the cursor image,
--        // so setting the cursor that is already current is expensive. Skip it.
--        if NSCursor.current != NSCursor.iBeam {
--            NSCursor.iBeam.set ()
--        }
-+        updateMouseCursor(at: convert(event.locationInWindow, from: nil),
-+                          modifiers: event.modifierFlags)
-+    }
-+
-+    // Share the click policy so the hand only appears when a link can be activated.
-+    // In particular, modifier-gated links return to the I-beam when Command is released.
-+    func updateMouseCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) {
+-        setPointer()
++        setPointer(at: convert(event.locationInWindow, from: nil))
+     }
+ 
+     /// The pointer shown over the terminal while `modifiers` are held: the
+@@ -2071,18 +2071,28 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+ 
+     /// Reads the keys held now unless given, since an event's flags can miss a
+     /// Shift held since before the cursor update AppKit sends after a rect change.
+-    private func setPointer(modifiers: NSEvent.ModifierFlags? = nil) {
+-        let modifiers = modifiers ?? heldModifierFlags()
++    private func setPointer(at point: NSPoint, modifiers: NSEvent.ModifierFlags? = nil) {
+         // AppKit calls cursorUpdate on every mouse move over the view and on every display
+         // cycle that re-evaluates cursor rects. With a customized pointer (size or
+         // colour in Accessibility settings) each set() re-renders the cursor image,
+         // so setting the cursor that is already current is expensive. Skip it.
+-        let cursor = pointerCursor(modifiers: modifiers)
++        let cursor = pointerCursor(at: point, modifiers: modifiers ?? heldModifierFlags())
+         if NSCursor.current != cursor {
+             cursor.set()
+         }
+     }
+ 
++    // Use the click policy so the hand only appears when a link can be activated.
++    func pointerCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) -> NSCursor {
++        let cursor = pointerCursor(modifiers: modifiers)
 +        guard visibleRect.contains(point),
-+              point.x < getEffectiveWidth(size: bounds.size) else { return }
++              point.x < getEffectiveWidth(size: bounds.size) else { return cursor }
 +        let hit = calculateMouseHit(at: point).grid
 +        let command = modifiers.contains(.command)
 +        updateHoverLink(at: hit, commandOverride: command)
-+        let cursor: NSCursor = linkForClick(at: hit, hasCommandModifier: command) == nil
-+            ? .iBeam : .pointingHand
-+        // Re-setting a customized accessibility pointer is expensive.
-+        if NSCursor.current != cursor { cursor.set() }
++        return linkForClick(at: hit, hasCommandModifier: command) == nil ? cursor : .pointingHand
++    }
++
+     /// The cursor the rect was last built with, so that a change of the rule
+     /// makes AppKit build the rects again only when it changes the rect.
+     private var cursorRectPointer: NSCursor?
+@@ -2166,21 +2176,22 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         if pointerCursor(modifiers: []) != cursorRectPointer {
+             window.invalidateCursorRects(for: self)
+         }
+-        if pointerIsOver(window) {
+-            setPointer(modifiers: modifiers)
++        if let point = pointerLocation(over: window) {
++            setPointer(at: point, modifiers: modifiers)
+         }
+     }
+ 
+-    /// Whether the pointer is over this view where it shows: a visible window,
++    /// The pointer location over this view where it shows: a visible window,
+     /// no hidden ancestor, and no other window or view above it at that point.
+-    private func pointerIsOver(_ window: NSWindow) -> Bool {
++    private func pointerLocation(over window: NSWindow) -> NSPoint? {
+         guard window.isVisible, !isHiddenOrHasHiddenAncestor,
+               let contentView = window.contentView,
+               let location = pointerLocationInTopmostWindow(window) else {
+-            return false
++            return nil
+         }
+         let point = contentView.superview?.convert(location, from: nil) ?? location
+-        return contentView.hitTest(point)?.isDescendant(of: self) == true
++        guard contentView.hitTest(point)?.isDescendant(of: self) == true else { return nil }
++        return convert(location, from: nil)
      }
      
      func makeFirstResponder ()
-@@ -2050,13 +2059,13 @@
+@@ -2294,13 +2305,13 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      func startTracking ()
      {
          if tracking == nil {
@@ -46,7 +88,7 @@
              addTrackingArea(tracking!)
          }
          startWindowMouseMovedFallback()
-@@ -2119,7 +2128,7 @@
+@@ -2363,7 +2374,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          if commandActive {
              return true
          }
@@ -55,26 +97,37 @@
              return true
          }
          if linkHighlightMode == .hoverWithModifier && commandActive {
-@@ -2177,6 +2186,12 @@
-     // when the Command key is pressed.
+@@ -2447,6 +2458,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         }
+         keyboardRouter.flagsChanged(event)
+         super.flagsChanged(with: event)
++        refreshPointer(modifiers: event.modifierFlags)
+     }
      
-     public override func flagsChanged(with event: NSEvent) {
-+        defer {
-+            if let window {
-+                updateMouseCursor(at: convert(window.mouseLocationOutsideOfEventStream, from: nil),
-+                                  modifiers: event.modifierFlags)
-+            }
-+        }
-         if event.modifierFlags.contains(.command){
-             commandActive = true
-             startTracking()
-@@ -4561,7 +4576,8 @@
+     public override func mouseExited(with event: NSEvent) {
+@@ -3966,14 +3978,14 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+     }
+     
+     public override func mouseMoved(with event: NSEvent) {
++        let point = convert(event.locationInWindow, from: nil)
+         if #available(macOS 26, *) {
+             // On macOS 26 movement arrives via `acceptsMouseMovedEvents`, which delivers
+             // to the first responder regardless of the pointer's location. Ignore moves
+             // outside our bounds so we do not report cells the pointer is not over.
+-            let point = convert(event.locationInWindow, from: nil)
+             if !bounds.contains(point) { return }
+         }
+-        let hit = calculateMouseHit(with: event)
++        let hit = calculateMouseHit(at: point)
+         if commandActive {
+             if let payload = getPayload(for: event) as? String {
+                 previewUrl (payload: payload)
+@@ -3982,7 +3994,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
              }
              reportLink(at: hit.grid)
          }
 -        updateHoverLink(at: hit.grid)
-+        updateMouseCursor(at: convert(event.locationInWindow, from: nil),
-+                          modifiers: event.modifierFlags)
++        setPointer(at: point, modifiers: event.modifierFlags)
          
          if withTerminal({ $0.mouseMode.sendMotionEvent() }) {
              let flags = encodeMouseEvent(with: event, overwriteRelease: true)

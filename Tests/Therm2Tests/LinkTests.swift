@@ -57,21 +57,33 @@ struct LinkTests {
         url.standardizedFileURL.resolvingSymlinksInPath().absoluteString
     }
 
+    @Test func commandGatedLinkUsesTheHandAndRestoresTheTerminalPointer() throws {
+        let view = TerminalView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        view.linkHighlightMode = .hoverWithModifier
+        view.feed(text: "\u{1b}[?1000h\u{1b}]8;;https://example.com\u{7}link\u{1b}]8;;\u{7}")
+        let cell = try #require(view.cellDimension)
+        let point = NSPoint(x: cell.width / 2, y: view.bounds.maxY - cell.height / 2)
+
+        #expect(view.pointerCursor(at: point, modifiers: []) === NSCursor.arrow)
+        #expect(view.pointerCursor(at: point, modifiers: .command) === NSCursor.pointingHand)
+        #expect(view.pointerCursor(at: point, modifiers: .shift) === NSCursor.iBeam)
+    }
+
     @Test(arguments: [false, true])
     func relativeAndLeadingSlashLinksUseThePaneDirectory(explicit: Bool) async throws {
         let root = try directory()
         defer { try? FileManager.default.removeItem(at: root) }
-        let patch = try file("patches/swiftterm-cursor-color.patch", in: root)
+        let patch = try file("patches/swiftterm-local-links.patch", in: root)
         let spaced = try file("patches/a patch.patch", in: root)
         let literal = try file("patches/source.swift:42", in: root)
         let source = try file("source.swift", in: root)
         let literalBasename = try file("source.swift:42", in: root)
         let pane = TerminalPane(directory: root.path)
         for (link, expected) in [
-            ("patches/swiftterm-cursor-color.patch", patch),
-            ("/patches/swiftterm-cursor-color.patch", patch),
-            ("./patches/swiftterm-cursor-color.patch", patch),
-            ("/patches/swiftterm-cursor-color.patch:12:4", patch),
+            ("patches/swiftterm-local-links.patch", patch),
+            ("/patches/swiftterm-local-links.patch", patch),
+            ("./patches/swiftterm-local-links.patch", patch),
+            ("/patches/swiftterm-local-links.patch:12:4", patch),
             ("patches/a patch.patch", spaced),
             ("patches/source.swift:42", literal),
             ("source.swift:12", source),

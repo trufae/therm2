@@ -16,26 +16,22 @@ Distribution builds need your own Developer ID signature and notarization.
 
 ## Dependency patches
 
-The pinned SwiftTerm 1.99.3 release ignores horizontal wheel deltas and lacks foreground-only
-dimming and unlimited history. Its cursor-color delegate signature also prevents
-OSC 12 updates from reaching the view. `make`, `make debug`, and `make test` automatically apply the patches for
+Therm2 pins SwiftTerm 1.99.4, which includes the OSC 12 cursor-color and OSC 112 reset fixes.
+`make`, `make debug`, and `make test` automatically apply the patches for
 [horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
 [foreground brightness](../patches/swiftterm-foreground-brightness.patch),
 [unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch),
-[cursor colors](../patches/swiftterm-cursor-color.patch),
 [local link resolution](../patches/swiftterm-local-links.patch), and
 [link hover cursors](../patches/swiftterm-link-cursor.patch) after
 resolution. The preparation is idempotent and fails on an unexpected upstream revision
 or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
 not apply the patches. `make prepare` applies them without building the app.
 
-All six patches were reviewed against 1.99.3; none is fully covered upstream.
-Horizontal scrolling, unlimited scrollback, cursor colors, and link hover cursors
-apply unchanged. The brightness patch preserves upstream's correction that explicit
-underline colors do not become bright when text is bold. The local-link patch now
-runs in `checkLink`, so the new `TerminalLinkRequest` delegate receives the original
-target and deferred `openDefault()` calls use the current pane directory. SwiftTerm's
-path classification distinguishes `source.swift:12` from numeric URLs such as `tel:5551234`.
+The brightness patch preserves upstream's handling of explicit underline colors when
+text is bold. The local-link patch runs in `checkLink`, so the `TerminalLinkRequest`
+delegate receives the original target and deferred `openDefault()` calls use the current
+pane directory. SwiftTerm's path classification distinguishes `source.swift:12` from
+numeric URLs such as `tel:5551234`.
 Upstream's OSC 7 resolution does not replace Therm2's actual PTY directory lookup,
 leading-slash fallback, or resolution of relative OSC 8 targets.
 
