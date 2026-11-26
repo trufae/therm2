@@ -1,0 +1,193 @@
+diff --git a/Sources/SwiftTerm/Apple/AppleTerminalView.swift b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
+index ffca579..e055644 100644
+--- a/Sources/SwiftTerm/Apple/AppleTerminalView.swift
++++ b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
+@@ -5484,6 +5484,7 @@ struct WheelReportBudget {
+ 
+     private var allowance: Double = Double(Self.burst)
+     private var stampNanoseconds: UInt64
++    private var nextSingleReportHorizontal: Bool?
+ 
+     init(nowNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds) {
+         stampNanoseconds = nowNanoseconds
+@@ -5522,6 +5523,29 @@ struct WheelReportBudget {
+         allowance -= Double(granted)
+         return granted
+     }
++
++    mutating func grant(
++        vertical: Int,
++        horizontal: Int,
++        preferHorizontal: Bool,
++        nowNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds
++    ) -> (vertical: Int, horizontal: Int) {
++        let granted = grant(vertical + horizontal, nowNanoseconds: nowNanoseconds)
++        guard vertical > 0, horizontal > 0, granted > 0 else {
++            return (min(vertical, granted), min(horizontal, granted))
++        }
++
++        // Alternate axes if successive diagonal events can only send one report each.
++        if granted == 1 {
++            let useHorizontal = nextSingleReportHorizontal ?? preferHorizontal
++            nextSingleReportHorizontal = !useHorizontal
++            return useHorizontal ? (0, 1) : (1, 0)
++        }
++
++        // Reserve one report for the other axis before satisfying the dominant axis.
++        let first = min(preferHorizontal ? horizontal : vertical, granted - 1)
++        return preferHorizontal ? (granted - first, first) : (first, granted - first)
++    }
+ }
+ 
+ /// Fractional wheel or finger travel retained only within one gesture and one route.
+diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+index af5baf3..4980f52 100644
+--- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
++++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+@@ -4163,14 +4163,20 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+                   event.scrollingDeltaX, event.scrollingDeltaY, columns, rows, route.rawValue)
+         }
+         if route == .mouse || route == .cursorKeys {
+-            // Share one budget across axes, prioritizing the dominant direction
+-            // so small diagonal jitter cannot consume the intended movement.
+-            if abs(columns) > abs(rows) {
+-                sendWheelSteps(event, steps: columns, horizontal: true, route: route)
+-                sendWheelSteps(event, steps: rows, horizontal: false, route: route)
++            func requested(_ steps: Int) -> Int {
++                route == .mouse
++                    ? WheelReportBudget.requestedReports(lineCount: steps, isPrecise: event.hasPreciseScrollingDeltas)
++                    : WheelReportBudget.requestedKeys(lineCount: steps)
++            }
++            let horizontalFirst = abs(columns) > abs(rows)
++            let counts = wheelReportBudget.grant(vertical: requested(rows), horizontal: requested(columns),
++                                                 preferHorizontal: horizontalFirst)
++            if horizontalFirst {
++                sendWheelSteps(event, steps: columns, count: counts.horizontal, horizontal: true, route: route)
++                sendWheelSteps(event, steps: rows, count: counts.vertical, horizontal: false, route: route)
+             } else {
+-                sendWheelSteps(event, steps: rows, horizontal: false, route: route)
+-                sendWheelSteps(event, steps: columns, horizontal: true, route: route)
++                sendWheelSteps(event, steps: rows, count: counts.vertical, horizontal: false, route: route)
++                sendWheelSteps(event, steps: columns, count: counts.horizontal, horizontal: true, route: route)
+             }
+         } else if rows != 0 {
+             if rows > 0 { scrollUp(lines: rows) } else { scrollDown(lines: -rows) }
+@@ -4183,7 +4189,8 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+                             accumulator: inout WheelDistanceAccumulator<WheelRoute>) -> Int {
+         guard delta.isFinite else { accumulator.reset(); return 0 }
+         // Bound arithmetic before converting accelerated distance to Int.
+-        let scaled = min(max(delta * scrollSensitivity, -cellSize * 1_000_000), cellSize * 1_000_000)
++        let limit = cellSize * 1_000_000
++        let scaled = delta == 0 ? 0 : min(max(delta * scrollSensitivity, -limit), limit)
+         if event.hasPreciseScrollingDeltas {
+             return accumulator.takeWholeLines(distance: scaled, cellHeight: cellSize, route: route)
+         }
+@@ -4193,12 +4200,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         return rounded != 0 ? rounded : (delta > 0 ? 1 : -1)
+     }
+ 
+-    private func sendWheelSteps(_ event: NSEvent, steps: Int, horizontal: Bool, route: WheelRoute) {
+-        guard steps != 0 else { return }
+-        let wanted = route == .mouse
+-            ? WheelReportBudget.requestedReports(lineCount: steps, isPrecise: event.hasPreciseScrollingDeltas)
+-            : WheelReportBudget.requestedKeys(lineCount: steps)
+-        let count = wheelReportBudget.grant(wanted)
++    private func sendWheelSteps(_ event: NSEvent, steps: Int, count: Int, horizontal: Bool, route: WheelRoute) {
+         guard count > 0 else { return }
+         if route == .cursorKeys {
+             for _ in 0..<count {
+diff --git a/Tests/SwiftTermTests/AlternateScrollModeTests.swift b/Tests/SwiftTermTests/AlternateScrollModeTests.swift
+index 8803d1c..6c63205 100644
+--- a/Tests/SwiftTermTests/AlternateScrollModeTests.swift
++++ b/Tests/SwiftTermTests/AlternateScrollModeTests.swift
+@@ -244,6 +244,43 @@ final class AlternateScrollModeTests: TerminalDelegate {
+         #expect(delegate.sent.allSatisfy { $0 == Array(EscapeSequences.moveDownNormal) })
+     }
+ 
++    @MainActor @Test func diagonalWheelEventReportsBothDirectionsWithinTheBurst() async {
++        let view = TerminalView(frame: CGRect(x: 0, y: 0, width: 320, height: 160))
++        let delegate = WheelCapturingDelegate()
++        view.terminalDelegate = delegate
++        view.terminal.feed(text: "\u{1b}[?1000h\u{1b}[?1006h")
++        guard let cell = view.cellDimension,
++              let wheel = Self.makePreciseWheelEvent(pixels: Int32((cell.height * 6.5).rounded()),
++                                                    horizontalPixels: -Int32((cell.width * 1.5).rounded())) else {
++            Issue.record("could not synthesize a diagonal scroll wheel event")
++            return
++        }
++
++        view.scrollWheel(with: wheel)
++        await drainMainQueue()
++
++        let reports = delegate.sent.map { String(decoding: $0, as: UTF8.self) }
++        #expect(reports.count == WheelReportBudget.burst)
++        #expect(reports.dropLast().allSatisfy { $0.hasPrefix("\u{1b}[<64;") })
++        #expect(reports.last?.hasPrefix("\u{1b}[<67;") == true)
++    }
++
++    @MainActor @Test func horizontalPreciseWheelWithInfiniteSensitivity() {
++        let view = TerminalView(frame: CGRect(x: 0, y: 0, width: 320, height: 160))
++        let delegate = WheelCapturingDelegate()
++        view.terminalDelegate = delegate
++        view.terminal.feed(text: "\u{1b}[?1049h")
++        view.scrollSensitivity = .infinity
++        guard let wheel = Self.makePreciseWheelEvent(pixels: 0, horizontalPixels: 10) else {
++            Issue.record("could not synthesize a horizontal scroll wheel event")
++            return
++        }
++
++        view.scrollWheel(with: wheel)
++
++        #expect(delegate.sent == Array(repeating: EscapeSequences.moveLeftNormal, count: WheelReportBudget.burst))
++    }
++
+     @MainActor @Test func optionWheelUsesLocalScrollbackDuringMouseTracking() {
+         let view = TerminalView(
+             frame: CGRect(x: 0, y: 0, width: 320, height: 160),
+@@ -310,13 +347,14 @@ final class AlternateScrollModeTests: TerminalDelegate {
+     /// Pixel units give `hasPreciseScrollingDeltas`, i.e. the accumulating path.
+     private static func makePreciseWheelEvent(
+         pixels: Int32,
++        horizontalPixels: Int32 = 0,
+         modifiers: CGEventFlags = []
+     ) -> NSEvent? {
+         guard let cg = CGEvent(scrollWheelEvent2Source: nil,
+                                units: .pixel,
+-                               wheelCount: 1,
++                               wheelCount: horizontalPixels == 0 ? 1 : 2,
+                                wheel1: pixels,
+-                               wheel2: 0,
++                               wheel2: horizontalPixels,
+                                wheel3: 0) else {
+             return nil
+         }
+diff --git a/Tests/SwiftTermTests/WheelReportBudgetTests.swift b/Tests/SwiftTermTests/WheelReportBudgetTests.swift
+index 3fc6e37..db0df91 100644
+--- a/Tests/SwiftTermTests/WheelReportBudgetTests.swift
++++ b/Tests/SwiftTermTests/WheelReportBudgetTests.swift
+@@ -39,6 +39,25 @@ import Testing
+         #expect(budget.grant(1, nowNanoseconds: start + 9_999_999) == 0)
+         #expect(budget.grant(1, nowNanoseconds: start + 10_000_000) == 1)
+     }
++
++    @Test func diagonalInputSharesTheBurstAndAlternatesWhenOnlyOneReportRefills() {
++        let start: UInt64 = 1_000_000_000
++        var budget = WheelReportBudget(nowNanoseconds: start)
++
++        let burst = budget.grant(vertical: 6, horizontal: 1, preferHorizontal: false, nowNanoseconds: start)
++        #expect(burst.vertical == 5)
++        #expect(burst.horizontal == 1)
++        #expect(budget.grant(1, nowNanoseconds: start) == 0)
++
++        let first = budget.grant(vertical: 6, horizontal: 1, preferHorizontal: false, nowNanoseconds: start + 10_000_000)
++        let second = budget.grant(vertical: 6, horizontal: 1, preferHorizontal: false, nowNanoseconds: start + 20_000_000)
++        #expect(first.vertical == 1 && first.horizontal == 0)
++        #expect(second.vertical == 0 && second.horizontal == 1)
++
++        let horizontalBurst = budget.grant(vertical: 1, horizontal: 6, preferHorizontal: true,
++                                           nowNanoseconds: start + 100_000_000)
++        #expect(horizontalBurst.vertical == 1 && horizontalBurst.horizontal == 5)
++    }
+ }
+ 
+ @Suite struct WheelDistanceAccumulatorTests {

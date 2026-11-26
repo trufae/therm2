@@ -1,0 +1,549 @@
+diff --git a/Sources/SwiftTerm/Apple/TerminalEventQueue.swift b/Sources/SwiftTerm/Apple/TerminalEventQueue.swift
+index 3af92b2..f0ded85 100644
+--- a/Sources/SwiftTerm/Apple/TerminalEventQueue.swift
++++ b/Sources/SwiftTerm/Apple/TerminalEventQueue.swift
+@@ -41,6 +41,8 @@ enum TerminalEvent: Int, CaseIterable, Sendable {
+     case bell = 2
+     /// Current program status changed. The view stores the latest snapshot.
+     case programStatusChanged = 3
++    /// The active screen's native pointer shape changed.
++    case mousePointerShapeChanged = 4
+ 
+     fileprivate var mask: UInt32 { 1 << UInt32(rawValue) }
+ }
+diff --git a/Sources/SwiftTerm/Buffer.swift b/Sources/SwiftTerm/Buffer.swift
+index 29ef08f..c18c7f0 100644
+--- a/Sources/SwiftTerm/Buffer.swift
++++ b/Sources/SwiftTerm/Buffer.swift
+@@ -2337,4 +2337,8 @@ public final class Buffer {
+         }
+     }    
+ #endif
++
++    /// OSC 22 state is separate for the normal and alternate screens. Keep cold
++    /// state last so it does not move the fields read by the parse/render paths.
++    var mousePointerShapes: [MousePointerShape] = []
+ }
+diff --git a/Sources/SwiftTerm/Documentation.docc/MousePointerShapes.md b/Sources/SwiftTerm/Documentation.docc/MousePointerShapes.md
+new file mode 100644
+index 0000000..8d40fb4
+--- /dev/null
++++ b/Sources/SwiftTerm/Documentation.docc/MousePointerShapes.md
+@@ -0,0 +1,40 @@
++# Mouse pointer shapes
++
++Let terminal applications select a native pointer shape with OSC 22.
++
++The core supports setting a shape, an independently bounded 16-entry stack for
++each screen, and capability queries using the
++[Kitty OSC 22 protocol](https://sw.kovidgoyal.net/kitty/pointer-shapes/).
++The implemented shape subset is `default`, `text`, `pointer`, and `crosshair`.
++The additional CSS `none` shape hides the pointer. Since `none` is an extension,
++applications should query it before use:
++
++```sh
++# Query support; an implementing host replies with OSC 22 ; 1 ST.
++printf '\033]22;?none\033\\'
++# Push a hidden pointer over the application's previous shape.
++printf '\033]22;>none\033\\'
++# Restore that shape.
++printf '\033]22;<\033\\'
++```
++
++An empty OSC 22 resets the active screen's stack. RIS clears both stacks.
++Pointer shape state is independent of mouse reporting and of the text caret.
++Queries for `__current__`, `__default__`, and `__grabbed__` are also supported.
++Unknown or unimplemented shapes are ignored when setting and return `0` when
++queried. Existing registered OSC 22 handlers retain precedence.
++
++On macOS, `TerminalView` renders all five shapes. The hidden shape uses a shared
++transparent `NSCursor` in the view's cursor rect, rather than the process-wide
++cursor hide count. Leaving the view restores AppKit's cursor behavior. Holding
++Shift to bypass application mouse reporting also restores the selection I-beam.
++Shape changes refresh a stationary pointer and are copied through the view's
++coalescing event queue; AppKit callbacks do not acquire the terminal lock.
++
++Other hosts opt in through
++``TerminalDelegate/supportedMousePointerShapes(source:)`` and apply the copied
++``Terminal/mousePointerShape`` from
++``TerminalDelegate/mousePointerShapeChanged(source:)`` on their UI thread.
++The default implementation advertises no support, so headless and unsupported
++hosts never claim to hide a native pointer. The macOS copied state is available
++as ``TerminalView/currentMousePointerShape``.
+diff --git a/Sources/SwiftTerm/EscapeSequenceParser.swift b/Sources/SwiftTerm/EscapeSequenceParser.swift
+index ed6115c..1c3ad17 100644
+--- a/Sources/SwiftTerm/EscapeSequenceParser.swift
++++ b/Sources/SwiftTerm/EscapeSequenceParser.swift
+@@ -814,6 +814,7 @@ final class EscapeSequenceParser {
+         case 10:   terminal.oscSetColors(data, startAt: 0)
+         case 11:   terminal.oscSetColors(data, startAt: 1)
+         case 12:   terminal.oscSetColors(data, startAt: 2)
++        case 22:   terminal.oscMousePointerShape(data)
+         case 52:   terminal.oscClipboard(data)
+         case 104:  terminal.oscResetColor(data)
+         case 110:  terminal.oscResetDynamicColor(foreground: true)
+diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+index 4980f52..0913880 100644
+--- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
++++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+@@ -2079,14 +2079,31 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+     /// return shared cursors such as `NSCursor.arrow`, since the view compares
+     /// them by identity to skip work when nothing changed.
+     open func pointerCursor(modifiers: NSEvent.ModifierFlags) -> NSCursor {
+-        guard allowMouseReporting && currentMouseMode != .off else { return .iBeam }
+-        let shiftSelects = modifiers.contains(.shift) && !mouseShiftCaptureState.withLock { $0 }
+-        return shiftSelects ? .iBeam : .arrow
+-    }
++        let tracking = allowMouseReporting && currentMouseMode != .off
++        let shiftSelects = tracking && modifiers.contains(.shift) && !mouseShiftCaptureState.withLock { $0 }
++        if shiftSelects { return .iBeam }
++        switch currentMousePointerShape {
++        case .defaultShape: return .arrow
++        case .text: return .iBeam
++        case .pointer: return .pointingHand
++        case .crosshair: return .crosshair
++        case .hidden: return Self.hiddenMousePointer
++        case nil: return tracking ? .arrow : .iBeam
++        }
++    }
++
++    // A transparent cursor is scoped to this view's cursor rect. Unlike
++    // NSCursor.hide(), it cannot leave the process-wide hide count unbalanced.
++    private static let hiddenMousePointer = NSCursor(
++        image: NSImage(size: NSSize(width: 16, height: 16), flipped: false) { rect in
++            NSGraphicsContext.current?.cgContext.clear(rect)
++            return true
++        }, hotSpot: .zero)
+ 
+     /// Reads the keys held now unless given, since an event's flags can miss a
+     /// Shift held since before the cursor update AppKit sends after a rect change.
+     private func setPointer(at point: NSPoint, modifiers: NSEvent.ModifierFlags? = nil) {
++        guard let hit = hitTest(convert(point, to: superview)), isTerminalPointerView(hit) else { return }
+         // AppKit calls cursorUpdate on every mouse move over the view and on every display
+         // cycle that re-evaluates cursor rects. With a customized pointer (size or
+         // colour in Accessibility settings) each set() re-renders the cursor image,
+@@ -2105,6 +2122,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         let hit = calculateMouseHit(at: point).grid
+         let command = modifiers.contains(.command)
+         updateHoverLink(at: hit, commandOverride: command)
++        guard currentMousePointerShape == nil else { return cursor }
+         return linkForClick(at: hit, hasCommandModifier: command) == nil ? cursor : .pointingHand
+     }
+ 
+@@ -2205,9 +2223,20 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+             return nil
+         }
+         let point = contentView.superview?.convert(location, from: nil) ?? location
+-        guard contentView.hitTest(point)?.isDescendant(of: self) == true else { return nil }
++        guard let hit = contentView.hitTest(point), isTerminalPointerView(hit) else { return nil }
+         return convert(location, from: nil)
+     }
++
++    // Find fields and other controls supply their own cursor. The Metal
++    // surface and the overlay for composed text are part of the terminal.
++    private func isTerminalPointerView(_ hit: NSView) -> Bool {
++        if hit === self || hit === markedTextOverlay { return true }
++#if canImport(MetalKit)
++        return hit === metalView
++#else
++        return false
++#endif
++    }
+     
+     func makeFirstResponder ()
+     {
+@@ -4350,6 +4379,14 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+     /// terminal lock.
+     nonisolated private let mouseShiftCaptureState = Locked(false)
+ 
++    nonisolated private let mousePointerShapeState = Locked<MousePointerShape?>(nil)
++
++    /// The active screen's OSC 22 pointer shape, or nil for the usual pointer.
++    /// This copied read does not take the terminal lock.
++    public var currentMousePointerShape: MousePointerShape? {
++        mousePointerShapeState.withLock { $0 }
++    }
++
+     /// The mouse reporting mode the program in the terminal last asked for,
+     /// `.off` when it has none. Hosts that give a click their own meaning, such
+     /// as a control-click context menu, can check it to leave the click to the
+@@ -4379,6 +4416,8 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+                 deregisterTrackingInterest()
+             }
+             pointerRuleChanged()
++        case .mousePointerShapeChanged:
++            pointerRuleChanged()
+         case .bell:
+             deliverBell()
+         case .programStatusChanged:
+@@ -4450,6 +4489,15 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         mouseShiftCaptureState.withLock { $0 = source.mouseShiftCapture }
+         eventQueue.post(.mouseModeChanged)
+     }
++
++    nonisolated open func supportedMousePointerShapes(source: Terminal) -> [MousePointerShape] {
++        MousePointerShape.allCases
++    }
++
++    nonisolated open func mousePointerShapeChanged(source: Terminal) {
++        mousePointerShapeState.withLock { $0 = source.mousePointerShape }
++        eventQueue.post(.mousePointerShapeChanged)
++    }
+     
+     public nonisolated func setTerminalTitle(source: Terminal, title: String) {
+         let capturedTitle = title
+diff --git a/Sources/SwiftTerm/MousePointerShape.swift b/Sources/SwiftTerm/MousePointerShape.swift
+new file mode 100644
+index 0000000..52449fb
+--- /dev/null
++++ b/Sources/SwiftTerm/MousePointerShape.swift
+@@ -0,0 +1,65 @@
++/// Native mouse pointer shapes understood by OSC 22.
++///
++/// `hidden` is the CSS `none` extension. Applications must query support before
++/// using it: hosts without a native pointer implementation advertise no shapes.
++public enum MousePointerShape: String, CaseIterable, Sendable {
++    case defaultShape = "default"
++    case text
++    case pointer
++    case crosshair
++    case hidden = "none"
++}
++
++extension Terminal {
++    /// The application's pointer shape for the active screen, or nil when the
++    /// host should use its usual pointer. Read while holding `terminalLock`.
++    public var mousePointerShape: MousePointerShape? {
++        buffer.mousePointerShapes.last
++    }
++
++    func oscMousePointerShape(_ data: ArraySlice<UInt8>) {
++        guard let text = terminalStringUTF8(data) else { return }
++        let first = text.first
++        let hasOperation = first == "?" || first == ">" || first == "<" || first == "="
++        let payload = hasOperation ? String(text.dropFirst()) : text
++        let names = payload.split(separator: ",", omittingEmptySubsequences: false)
++        let supported = tdel?.supportedMousePointerShapes(source: self) ?? []
++
++        if first == "?" {
++            let replies = names.map { name -> String in
++                switch name {
++                case "__current__": return mousePointerShape?.rawValue ?? "0"
++                case "__default__": return supported.contains(.text) ? "text" : "0"
++                case "__grabbed__": return supported.contains(.defaultShape) ? "default" : "0"
++                default:
++                    guard let shape = MousePointerShape(rawValue: String(name)) else { return "0" }
++                    return supported.contains(shape) ? "1" : "0"
++                }
++            }
++            sendResponse(cc.OSC, "22;" + replies.joined(separator: ","), cc.ST)
++            return
++        }
++
++        let previous = mousePointerShape
++        if first == "<" {
++            _ = buffer.mousePointerShapes.popLast()
++        } else if payload.isEmpty && first != ">" {
++            buffer.mousePointerShapes.removeAll()
++        } else if first == ">" {
++            for name in names {
++                guard let shape = MousePointerShape(rawValue: String(name)), supported.contains(shape) else { continue }
++                if buffer.mousePointerShapes.count == 16 { buffer.mousePointerShapes.removeFirst() }
++                buffer.mousePointerShapes.append(shape)
++            }
++        } else if names.count == 1, let shape = MousePointerShape(rawValue: payload), supported.contains(shape) {
++            if buffer.mousePointerShapes.isEmpty {
++                buffer.mousePointerShapes.append(shape)
++            } else {
++                buffer.mousePointerShapes[buffer.mousePointerShapes.count - 1] = shape
++            }
++        }
++        if mousePointerShape != previous {
++            tdel?.mousePointerShapeChanged(source: self)
++        }
++    }
++}
+diff --git a/Sources/SwiftTerm/Terminal.swift b/Sources/SwiftTerm/Terminal.swift
+index 906998a..1a3591c 100644
+--- a/Sources/SwiftTerm/Terminal.swift
++++ b/Sources/SwiftTerm/Terminal.swift
+@@ -140,6 +140,14 @@ public protocol TerminalDelegate: AnyObject {
+      * The default implementation ignores the mouse change
+      */
+     func mouseModeChanged (source: Terminal)
++
++    /// Native pointer shapes the host can actually display. The default is empty.
++    /// Called on the terminal's processing thread with `terminalLock` held.
++    func supportedMousePointerShapes(source: Terminal) -> [MousePointerShape]
++
++    /// The active screen's native pointer shape changed. The default does nothing.
++    /// Copy `mousePointerShape` here and apply UI changes on the host's UI thread.
++    func mousePointerShapeChanged(source: Terminal)
+     
+     /**
+      * This method is invoked when a request to change the cursor style has been issued
+@@ -1379,6 +1387,7 @@ open class Terminal {
+         if buffer === normalBuffer {
+             return
+         }
++        let previousPointerShape = mousePointerShape
+         semanticNoteAlternateScreenSwitch()
+ 
+         // A full-screen program can sit over thousands of normal-buffer scrollback lines. While
+@@ -1402,12 +1411,14 @@ open class Terminal {
+         _buffer = normalBuffer
+         kittyGraphicsState.activeIsAlternate = false
+         kittyGraphicsDidActivateScreen()
++        if mousePointerShape != previousPointerShape { tdel?.mousePointerShapeChanged(source: self) }
+     }
+     
+     private func activateAltBuffer(fillAttr: Attribute?) {
+         if buffer === altBuffer {
+             return
+         }
++        let previousPointerShape = mousePointerShape
+         semanticNoteAlternateScreenSwitch()
+         altBuffer.x = normalBuffer.x
+         altBuffer.y = normalBuffer.y
+@@ -1422,6 +1433,7 @@ open class Terminal {
+         kittyGraphicsState.activeIsAlternate = true
+         clearKittyImages(in: altBuffer, isAlternateBuffer: true)
+         kittyGraphicsDidActivateScreen()
++        if mousePointerShape != previousPointerShape { tdel?.mousePointerShapeChanged(source: self) }
+     }
+ 
+     private func resizeNormalBufferToCurrentGridIfNeeded() {
+@@ -1459,7 +1471,10 @@ open class Terminal {
+         _rows = max (options.rows, MINIMUM_ROWS)
+         
+         if isReset {
++            let previousPointerShape = mousePointerShape
+             clearProgramStatus()
++            normalBuffer.mousePointerShapes.removeAll()
++            altBuffer.mousePointerShapes.removeAll()
+             resetNormalBuffer()
+             activateNormalBuffer(clearAlt: false)
+             // A full reset also clears the alternate screen, even when it is not
+@@ -1467,6 +1482,7 @@ open class Terminal {
+             clearKittyImages(in: altBuffer, isAlternateBuffer: true)
+             altBuffer.clear ()
+             resetSemanticPromptState(clearingScreenMarks: true)
++            if mousePointerShape != previousPointerShape { tdel?.mousePointerShapeChanged(source: self) }
+         } else {
+             normalBuffer.resize(newCols: cols, newRows: rows)
+             altBuffer.resize(newCols: cols, newRows: rows)
+@@ -10638,6 +10654,10 @@ final class ViewTerminal: Terminal {
+ 
+ // Default implementations
+ public extension TerminalDelegate {
++    func supportedMousePointerShapes(source: Terminal) -> [MousePointerShape] { [] }
++
++    func mousePointerShapeChanged(source: Terminal) {}
++
+     func clipboardReadRequest(source: Terminal, selection: String) -> Bool { false }
+ 
+     func cursorStyleChanged (source: Terminal, newStyle: CursorStyle)
+diff --git a/Sources/SwiftTerm/iOS/iOSTerminalView.swift b/Sources/SwiftTerm/iOS/iOSTerminalView.swift
+index ad73036..17b4480 100644
+--- a/Sources/SwiftTerm/iOS/iOSTerminalView.swift
++++ b/Sources/SwiftTerm/iOS/iOSTerminalView.swift
+@@ -3838,6 +3838,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
+         case .mouseModeChanged:
+             // iOS has no tracking-area equivalent to update.
+             break
++        case .mousePointerShapeChanged:
++            // This host does not advertise native pointer shape support.
++            break
+         case .bell:
+             deliverBell()
+         case .programStatusChanged:
+diff --git a/Tests/SwiftTermTests/MacPointerCursorTests.swift b/Tests/SwiftTermTests/MacPointerCursorTests.swift
+index 06d6444..08195cb 100644
+--- a/Tests/SwiftTermTests/MacPointerCursorTests.swift
++++ b/Tests/SwiftTermTests/MacPointerCursorTests.swift
+@@ -29,6 +29,47 @@ struct MacPointerCursorTests {
+         #expect(view.pointerCursor(modifiers: []) === NSCursor.iBeam)
+     }
+ 
++    @Test func osc22SelectsShapesAndRestoresThemWithoutMouseTracking() throws {
++        let view = makeView()
++        view.feed(text: "\(esc)]22;pointer\(esc)\\")
++        #expect(view.currentMousePointerShape == .pointer)
++        #expect(view.pointerCursor(modifiers: []) === NSCursor.pointingHand)
++        view.feed(text: "\(esc)]22;>none\(esc)\\")
++        let hidden = view.pointerCursor(modifiers: [])
++        #expect(view.currentMousePointerShape == .hidden)
++        #expect(hidden !== NSCursor.arrow && hidden !== NSCursor.iBeam)
++        #expect(view.pointerCursor(modifiers: []) === hidden)
++        let image = try #require(hidden.image.tiffRepresentation)
++        let bitmap = try #require(NSBitmapImageRep(data: image))
++        #expect(bitmap.pixelsWide > 0 && bitmap.pixelsHigh > 0)
++        for y in 0..<bitmap.pixelsHigh {
++            for x in 0..<bitmap.pixelsWide {
++                #expect(bitmap.colorAt(x: x, y: y)?.alphaComponent == 0)
++            }
++        }
++        view.feed(text: "\(esc)]22;<\(esc)\\")
++        #expect(view.pointerCursor(modifiers: []) === NSCursor.pointingHand)
++        view.feed(text: "\(esc)]22;\(esc)\\")
++        #expect(view.currentMousePointerShape == nil)
++        #expect(view.pointerCursor(modifiers: []) === NSCursor.iBeam)
++    }
++
++    @Test func osc22RespectsLocalSelectionAndScreenSwitches() {
++        let view = makeView()
++        view.feed(text: "\(esc)[?1003h\(esc)]22;none\(esc)\\")
++        let hidden = view.pointerCursor(modifiers: [])
++        #expect(view.pointerCursor(modifiers: .shift) === NSCursor.iBeam)
++        view.feed(text: "\(esc)[>1s")
++        #expect(view.pointerCursor(modifiers: .shift) === hidden)
++        view.feed(text: "\(esc)[?1049h")
++        #expect(view.currentMousePointerShape == nil)
++        #expect(view.pointerCursor(modifiers: []) === NSCursor.arrow)
++        view.feed(text: "\(esc)[?1049l")
++        #expect(view.currentMousePointerShape == .hidden)
++        view.resetToInitialState()
++        #expect(view.currentMousePointerShape == nil)
++    }
++
+     @Test func mouseReportingShowsTheArrow() {
+         let view = makeView()
+         view.feed(text: "\(esc)[?1000h\(esc)[?1006h")
+@@ -106,6 +147,35 @@ struct MacPointerCursorTests {
+         return window
+     }
+ 
++    @Test func osc22UpdatesAStationaryPointerAndFullResetRestoresIt() {
++        let view = makeView()
++        let window = showInWindow(view)
++        defer {
++            window.orderOut(nil)
++            NSCursor.arrow.set()
++        }
++        NSCursor.iBeam.set()
++        view.feed(text: "\(esc)]22;none\(esc)\\")
++        view.eventQueue.drain()
++        #expect(NSCursor.current === view.pointerCursor(modifiers: []))
++        #expect(view.currentMousePointerShape == .hidden)
++        view.resetToInitialState()
++        view.eventQueue.drain()
++        #expect(NSCursor.current === NSCursor.iBeam)
++    }
++
++    @Test func osc22DoesNotHideThePointerOutsideItsView() {
++        let view = makeView()
++        let window = showInWindow(view)
++        defer { window.orderOut(nil) }
++        view.pointerLocationInTopmostWindow = { _ in nil }
++        NSCursor.arrow.set()
++        view.feed(text: "\(esc)]22;none\(esc)\\")
++        view.eventQueue.drain()
++        #expect(view.currentMousePointerShape == .hidden)
++        #expect(NSCursor.current === NSCursor.arrow)
++    }
++
+     @Test func mouseModeChangeUpdatesThePointerAtOnce() {
+         let view = makeView()
+         let window = showInWindow(view)
+diff --git a/Tests/SwiftTermTests/MousePointerShapeTests.swift b/Tests/SwiftTermTests/MousePointerShapeTests.swift
+new file mode 100644
+index 0000000..9825333
+--- /dev/null
++++ b/Tests/SwiftTermTests/MousePointerShapeTests.swift
+@@ -0,0 +1,96 @@
++import Testing
++@testable import SwiftTerm
++
++private final class MousePointerDelegate: TerminalDelegate {
++    var supported = MousePointerShape.allCases
++    var responses: [String] = []
++    var changes: [MousePointerShape?] = []
++
++    func supportedMousePointerShapes(source: Terminal) -> [MousePointerShape] { supported }
++    func mousePointerShapeChanged(source: Terminal) { changes.append(source.mousePointerShape) }
++    func send(source: Terminal, data: ArraySlice<UInt8>) {
++        responses.append(String(decoding: data, as: UTF8.self))
++    }
++}
++
++struct MousePointerShapeTests {
++    private let esc = "\u{1b}"
++
++    private func makeTerminal() -> (Terminal, MousePointerDelegate) {
++        let delegate = MousePointerDelegate()
++        return (Terminal(delegate: delegate), delegate)
++    }
++
++    @Test func queriesReportOnlyShapesImplementedByTheHost() {
++        let (terminal, delegate) = makeTerminal()
++        terminal.feed(text: "\(esc)]22;?none,text,pointer,crosshair,default,unknown\(esc)\\")
++        #expect(delegate.responses == ["\(esc)]22;1,1,1,1,1,0\(esc)\\"])
++        delegate.supported = []
++        terminal.feed(text: "\(esc)]22;?none,text\u{7}\(esc)]22;none\u{7}")
++        #expect(delegate.responses.last == "\(esc)]22;0,0\(esc)\\")
++        #expect(terminal.mousePointerShape == nil)
++        #expect(delegate.changes.isEmpty)
++    }
++
++    @Test func setPushPopAndResetPreserveThePreviousPointer() {
++        let (terminal, delegate) = makeTerminal()
++        terminal.feed(text: "\(esc)]22;pointer\(esc)\\\(esc)]22;>none\(esc)\\")
++        #expect(terminal.mousePointerShape == .hidden)
++        terminal.feed(text: "\(esc)]22;?__current__,__default__,__grabbed__\(esc)\\")
++        #expect(delegate.responses.last == "\(esc)]22;none,text,default\(esc)\\")
++        terminal.feed(text: "\(esc)]22;<ignored\(esc)\\")
++        #expect(terminal.mousePointerShape == .pointer)
++        terminal.feed(text: "\(esc)]22;=text\(esc)\\\(esc)]22;unknown\(esc)\\")
++        #expect(terminal.mousePointerShape == .text)
++        terminal.feed(text: "\(esc)]22;\(esc)\\\(esc)]22;<\(esc)\\")
++        #expect(terminal.mousePointerShape == nil)
++        #expect(delegate.changes == [.pointer, .hidden, .pointer, .text, nil])
++    }
++
++    @Test func pointerStacksAreIndependentOfMouseTrackingAndScreenContents() {
++        let (terminal, delegate) = makeTerminal()
++        defer { withExtendedLifetime(delegate) {} }
++        terminal.feed(text: "\(esc)]22;pointer\(esc)\\\(esc)[?1049h")
++        #expect(terminal.mousePointerShape == nil)
++        terminal.feed(text: "\(esc)]22;none\(esc)\\\(esc)[?1003h\(esc)[?1003l\(esc)[2J")
++        #expect(terminal.mousePointerShape == .hidden)
++        terminal.feed(text: "\(esc)[?1049l")
++        #expect(terminal.mousePointerShape == .pointer)
++        terminal.feed(text: "\(esc)[?1049h")
++        #expect(terminal.mousePointerShape == .hidden)
++        terminal.feed(text: "\(esc)c")
++        #expect(terminal.mousePointerShape == nil)
++        terminal.feed(text: "\(esc)[?1049h")
++        #expect(terminal.mousePointerShape == nil)
++    }
++
++    @Test func pushIsBoundedAndIgnoresUnsupportedNames() {
++        let (terminal, delegate) = makeTerminal()
++        defer { withExtendedLifetime(delegate) {} }
++        terminal.feed(text: "\(esc)]22;>pointer," + Array(repeating: "none", count: 16).joined(separator: ",") + "\(esc)\\")
++        #expect(terminal.buffer.mousePointerShapes.count == 16)
++        #expect(terminal.mousePointerShape == .hidden)
++        terminal.feed(text: "\(esc)]22;>bad\(esc)\\")
++        #expect(terminal.buffer.mousePointerShapes.count == 16)
++        for _ in 0..<16 { terminal.feed(text: "\(esc)]22;<\(esc)\\") }
++        #expect(terminal.mousePointerShape == nil)
++    }
++
++    @Test func splitSequencesAndCustomOscHandlersKeepTheirBehavior() {
++        let sequence = Array("\(esc)]22;>none\(esc)\\".utf8)
++        for split in 1..<sequence.count {
++            let (terminal, delegate) = makeTerminal()
++            defer { withExtendedLifetime(delegate) {} }
++            terminal.feed(buffer: sequence[..<split])
++            // The existing OSC parser dispatches when it sees ST's ESC byte.
++            if split < sequence.count - 1 { #expect(terminal.mousePointerShape == nil) }
++            terminal.feed(buffer: sequence[split...])
++            #expect(terminal.mousePointerShape == .hidden)
++        }
++        let (terminal, _) = makeTerminal()
++        var overridden = false
++        terminal.registerOscHandler(code: 22) { _ in overridden = true }
++        terminal.feed(text: "\(esc)]22;none\(esc)\\")
++        #expect(overridden && terminal.mousePointerShape == nil)
++    }
++}

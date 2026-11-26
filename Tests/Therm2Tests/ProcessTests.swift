@@ -120,7 +120,7 @@ struct ProcessTests {
         defer { pane.terminate() }
         try await waitFor("READY", in: pane)
         #expect(pane.newSessionDirectory == NSHomeDirectory())
-        let resolved = try #require(pane.localLinkResolver?("/patch.txt"))
+        let resolved = try #require(pane.localLinkResolver?("/patch.txt", nil))
         #expect(resolved.resolvingSymlinksInPath() == file.resolvingSymlinksInPath())
     }
 }

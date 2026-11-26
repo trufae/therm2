@@ -48,7 +48,10 @@ final class TerminalPane: LocalProcessTerminalView {
         suspendsRenderingWhenNotVisible = true
         setAccessibilityLabel("Terminal")
         registerForDraggedTypes(TerminalDrop.pasteboardTypes)
-        localLinkResolver = { [weak self] link in
+        // Resolve against the PTY directory when opening the link. Hovering
+        // only shows the target and avoids querying the shell process.
+        usesDefaultLinkPolicyForPreview = false
+        localLinkResolver = { [weak self] link, _ in
             guard let self else { return nil }
             return TerminalLink.fileURL(link, directory: self.currentWorkingDirectory)
         }

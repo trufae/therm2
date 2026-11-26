@@ -81,10 +81,18 @@ struct ScrollingTests {
 
     @Test func diagonalInputReportsBothAxesWithinOneBudget() async throws {
         let (view, recorder) = terminal()
-        await scroll(view, try wheel(x: 20, y: 20))
+        await scroll(view, try wheel(x: 20, y: 200))
         #expect(recorder.text.contains("\u{1b}[<66;"))
         #expect(recorder.text.contains("\u{1b}[<64;"))
         #expect(recorder.writes.count <= 6)
+    }
+
+    @Test func infiniteSensitivityKeepsAZeroAxisAtRest() async throws {
+        let (view, recorder) = terminal()
+        view.scrollSensitivity = .infinity
+        await scroll(view, try wheel(x: 20))
+        #expect(!recorder.writes.isEmpty)
+        #expect(recorder.writes.allSatisfy { String(decoding: $0, as: UTF8.self).hasPrefix("\u{1b}[<66;") })
     }
 
     @Test func subcellHorizontalTravelAccumulates() async throws {

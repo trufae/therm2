@@ -67,6 +67,31 @@ struct LinkTests {
         #expect(view.pointerCursor(at: point, modifiers: []) === NSCursor.arrow)
         #expect(view.pointerCursor(at: point, modifiers: .command) === NSCursor.pointingHand)
         #expect(view.pointerCursor(at: point, modifiers: .shift) === NSCursor.iBeam)
+
+        view.feed(text: "\u{1b}]22;>none\u{7}")
+        #expect(view.currentMousePointerShape == .hidden)
+        #expect(view.pointerCursor(at: point, modifiers: .command) === view.pointerCursor(modifiers: []))
+        view.feed(text: "\u{1b}]22;<\u{7}")
+        #expect(view.pointerCursor(at: point, modifiers: .command) === NSCursor.pointingHand)
+    }
+
+    @Test func previewShowsTheOriginalTargetAndOpeningResolvesItInThePane() async throws {
+        let root = try directory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let readme = try file("README", in: root)
+        let pane = TerminalPane(directory: root.path)
+        let resolver = try #require(pane.localLinkResolver)
+        var resolutions = 0
+        pane.localLinkResolver = { link, shellDirectory in
+            resolutions += 1
+            return resolver(link, shellDirectory)
+        }
+
+        pane.previewUrl(payload: ";README:12")
+        #expect(pane.urlPreview?.stringValue == "README:12")
+        #expect(resolutions == 0)
+        #expect(await activate("README:12", in: pane).links == [canonical(readme)])
+        #expect(resolutions == 1)
     }
 
     @Test(arguments: [false, true])
@@ -165,7 +190,7 @@ struct LinkTests {
             #expect(result.links == [link])
             #expect(result.alerts.isEmpty)
         }
-        for link in ["ssh://example.com", "tel:5551234"] {
+        for link in ["ssh://example.com", "tel:5551234", "custom:123", "vscode:123"] {
             let cancelled = await activate(link, in: pane)
             #expect(cancelled.links.isEmpty)
             #expect(cancelled.alerts == ["Open link from terminal output?"])

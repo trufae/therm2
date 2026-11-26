@@ -17,28 +17,30 @@ Distribution builds need your own Developer ID signature and notarization.
 ## Dependency patches
 
 Therm2 pins SwiftTerm 1.99.4, which includes the OSC 12 cursor-color and OSC 112 reset fixes.
-`make`, `make debug`, and `make test` automatically apply the patches for
-[horizontal scrolling](../patches/swiftterm-horizontal-scroll.patch),
-[foreground brightness](../patches/swiftterm-foreground-brightness.patch),
-[unlimited scrollback](../patches/swiftterm-unlimited-scrollback.patch),
-[local link resolution](../patches/swiftterm-local-links.patch), and
-[link hover cursors](../patches/swiftterm-link-cursor.patch) after
-resolution. The preparation is idempotent and fails on an unexpected upstream revision
-or conflicting edits. Use these targets; a raw `swift build` after a fresh checkout does
-not apply the patches. `make prepare` applies them without building the app.
+`make`, `make debug`, and `make test` apply the dependency patches after resolution.
+`make prepare` applies them without building. Preparation accepts a clean checkout or
+one with earlier patches applied, and stops if the SwiftTerm revision or patch state is
+unexpected. A direct `swift build` requires a prepared checkout.
 
-The brightness patch preserves upstream's handling of explicit underline colors when
-text is bold. The local-link patch runs in `checkLink`, so the `TerminalLinkRequest`
-delegate receives the original target and deferred `openDefault()` calls use the current
-pane directory. SwiftTerm's path classification distinguishes `source.swift:12` from
-numeric URLs such as `tel:5551234`.
-Upstream's OSC 7 resolution does not replace Therm2's actual PTY directory lookup,
-leading-slash fallback, or resolution of relative OSC 8 targets.
+- Horizontal scrolling shares the report budget between both axes of a diagonal gesture.
+  [Feature patch](../patches/swiftterm-horizontal-scroll.patch), [review fixes](../patches/swiftterm-horizontal-scroll-review.patch)
+- Foreground brightness preserves the handling of explicit underline colors on bold text.
+  [Patch](../patches/swiftterm-foreground-brightness.patch)
+- Truecolor output reclaims unused styles when the attribute table fills and keeps renderer
+  attribute caches bounded. [Patch](../patches/swiftterm-style-arena-reclamation.patch)
+- OSC 22 lets terminal programs choose a pointer shape or hide the native pointer over
+  terminal text. The selected shape takes precedence over the link hover cursor.
+  [OSC 22 patch](../patches/swiftterm-mouse-pointer-shapes.patch), [link cursor patch](../patches/swiftterm-link-cursor.patch)
+- The local-link resolver uses the pane’s PTY directory when opening a link. Command-hover
+  shows the original target, and deferred `openDefault()` calls use the directory at the
+  time they run. Numeric URLs such as `tel:5551234` and `vscode:123` keep their usual policy.
+  [Resolver patch](../patches/swiftterm-local-links.patch), [link policy patch](../patches/swiftterm-local-link-policy.patch)
 
 Unlimited scrollback grows the history buffer on demand instead of preallocating
 a large fixed limit. Limited mode keeps 0–1,000,000 lines above the visible screen;
 the default is 1,000. Changes apply to existing panes, and reducing the limit
 discards the oldest excess lines. Unlimited history stays in memory for the session.
+[Patch](../patches/swiftterm-unlimited-scrollback.patch)
 
 Local links, including OSC 8 targets, resolve against the pane's current shell directory,
 independently of the new-session directory preference. Existing absolute paths take
