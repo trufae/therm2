@@ -377,7 +377,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         contentLayoutObservation = nil
         NotificationCenter.default.removeObserver(self)
-        tabs.forEach { $0.stop() }
+        TerminalTab.stopAll(tabs)
         tabs.removeAll()
         (NSApp.delegate as? AppDelegate)?.updatePresentation()
         onClose?()

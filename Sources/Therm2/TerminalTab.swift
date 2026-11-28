@@ -116,9 +116,11 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         replace(parent, with: sibling)
     }
 
-    func stop() {
-        setPaneMaximized(false)
-        for pane in panes { pane.stop() }
+    func stop() { Self.stopAll([self]) }
+
+    static func stopAll(_ tabs: [TerminalTab]) {
+        for tab in tabs { tab.setPaneMaximized(false) }
+        TerminalPane.stopAll(tabs.flatMap(\.panes))
     }
 
     func cyclePane(by delta: Int) {

@@ -1,6 +1,8 @@
 import Darwin
+import Dispatch
 
-struct TerminalProcess {
+struct TerminalProcess: Sendable {
+    private static let pendingTerminations = DispatchGroup()
     private let info: proc_bsdinfo
 
     private var pid: pid_t { pid_t(info.pbi_pid) }
@@ -40,21 +42,39 @@ struct TerminalProcess {
         }
     }
 
-    func terminateDescendants() {
-        // Take the whole snapshot before signaling parents, which can orphan their children.
-        var descendants = children
+    var processTree: [TerminalProcess] {
+        var processes = [self]
         var index = 0
-        while index < descendants.count {
-            let child = descendants[index]
-            descendants.append(contentsOf: child.children)
+        while index < processes.count {
+            let children = processes[index].children
+            processes.append(contentsOf: children)
             index += 1
         }
-        for child in descendants.reversed() {
-            guard let current = child.currentProcess else { continue }
-            if kill(child.pid, SIGTERM) == 0, current.info.pbi_status == SSTOP {
-                kill(child.pid, SIGCONT)
+        return processes
+    }
+
+    static func terminateAll(_ processes: [TerminalProcess]) {
+        // Signal children first and keep their identities even if their parents exit.
+        let pending = processes.reversed().filter { process in
+            guard let current = process.currentProcess, kill(current.pid, SIGTERM) == 0 else { return false }
+            if current.info.pbi_status == SSTOP, process.currentProcess != nil {
+                kill(current.pid, SIGCONT)
+            }
+            return true
+        }
+        guard !pending.isEmpty else { return }
+
+        pendingTerminations.enter()
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + .milliseconds(500)) {
+            defer { pendingTerminations.leave() }
+            for process in pending where process.currentProcess != nil {
+                kill(process.pid, SIGKILL)
             }
         }
+    }
+
+    static func waitForPendingTerminations() {
+        pendingTerminations.wait()
     }
 
     private var currentProcess: TerminalProcess? {

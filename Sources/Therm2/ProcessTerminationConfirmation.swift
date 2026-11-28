@@ -4,7 +4,8 @@ import AppKit
 enum ProcessTerminationConfirmation {
     private static var isPresenting = false
 
-    static func confirm(_ action: String, panes: [TerminalPane]) -> Bool {
+    static func confirm(_ action: String, panes: [TerminalPane],
+                        runModal: (NSAlert) -> NSApplication.ModalResponse = { $0.runModal() }) -> Bool {
         guard !isPresenting else { return false }
         guard panes.contains(where: \.hasRunningPrograms) else { return true }
 
@@ -19,6 +20,6 @@ enum ProcessTerminationConfirmation {
 
         isPresenting = true
         defer { isPresenting = false }
-        return alert.runModal() == .alertSecondButtonReturn
+        return runModal(alert) == .alertSecondButtonReturn
     }
 }

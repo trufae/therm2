@@ -47,7 +47,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationDidResignActive(_ notification: Notification) { updatePresentation() }
 
     func applicationWillTerminate(_ notification: Notification) {
-        for controller in windows.values { controller.tabs.forEach { $0.stop() } }
+        TerminalTab.stopAll(windows.values.flatMap(\.tabs))
+        // Finish cleanup for open sessions and panes already closed during the grace period.
+        TerminalProcess.waitForPendingTerminations()
     }
 
     func updatePresentation() {

@@ -160,15 +160,22 @@ final class TerminalPane: LocalProcessTerminalView {
                      currentDirectory: directory)
     }
 
-    func stop() {
-        guard !stopped else { return }
-        stopped = true
-        processDelegate = nil
-        tab = nil
-        if started {
-            sessionProcess?.terminateDescendants()
-            terminate()
+    func stop() { Self.stopAll([self]) }
+
+    static func stopAll(_ panes: [TerminalPane]) {
+        var processes: [TerminalProcess] = []
+        for pane in panes where !pane.stopped {
+            pane.stopped = true
+            pane.processDelegate = nil
+            pane.tab = nil
+            guard pane.started else { continue }
+            if let session = pane.sessionProcess {
+                processes.append(contentsOf: session.processTree)
+            } else {
+                pane.terminate()
+            }
         }
+        TerminalProcess.terminateAll(processes)
     }
 
     private static var shell: String {

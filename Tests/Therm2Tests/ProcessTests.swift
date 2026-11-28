@@ -103,6 +103,50 @@ struct ProcessTests {
         #expect(TerminalProcess(pid: pid) == nil)
     }
 
+    @Test func acceptingCloseStopsCommandsAndBackgroundJobsThatIgnoreTermination() async throws {
+        let command = try #require(try LaunchCommand.parse(["-e", "/bin/sh", "-c", """
+            trap '' HUP TERM
+            /bin/sleep 8 &
+            printf 'JOB:%s\\n' "$!"
+            wait
+            """]))
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab(command: command)
+        let tab = try #require(controller.selectedTab)
+        let pane = tab.activePane
+        try await waitFor("JOB:", in: pane)
+        let output = String(decoding: pane.getBufferAsData(), as: UTF8.self)
+        let job = try #require(output.firstMatch(of: /JOB:([0-9]+)/))
+        let jobPID = try #require(pid_t(job.1))
+        let commandPID = pane.process.shellPid
+        try #require(TerminalProcess(pid: jobPID)?.parentPID == commandPID)
+        #expect(pane.hasRunningPrograms)
+
+        let cancelled = ProcessTerminationConfirmation.confirm("Close Tab", panes: tab.panes) { alert in
+            #expect(alert.buttons.map(\.title) == ["Cancel", "Close Tab"])
+            return .alertFirstButtonReturn
+        }
+        #expect(!cancelled)
+        #expect(TerminalProcess(pid: commandPID) != nil)
+        #expect(TerminalProcess(pid: jobPID) != nil)
+
+        let accepted = ProcessTerminationConfirmation.confirm("Close Tab", panes: tab.panes) { _ in
+            .alertSecondButtonReturn
+        }
+        try #require(accepted)
+        controller.closeTab(tab)
+
+        let deadline = ContinuousClock.now + .seconds(2)
+        while (TerminalProcess(pid: commandPID) != nil || TerminalProcess(pid: jobPID) != nil),
+              ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(TerminalProcess(pid: commandPID) == nil)
+        #expect(TerminalProcess(pid: jobPID) == nil)
+    }
+
     @Test func aProgramThatReplacesTheLoginShellRequiresConfirmation() async throws {
         let pane = TerminalPane(directory: NSHomeDirectory())
         pane.start()
