@@ -16,7 +16,7 @@ Distribution builds need your own Developer ID signature and notarization.
 
 ## Dependency patches
 
-Therm2 pins SwiftTerm 1.99.4, which includes the OSC 12 cursor-color and OSC 112 reset fixes.
+Therm2 pins SwiftTerm upstream `main` at `a480ce66166c9d23798580c1d4d845434b97d24a`.
 `make`, `make debug`, and `make test` apply the dependency patches after resolution.
 `make prepare` applies them without building. Preparation accepts a clean checkout or
 one with earlier patches applied, and stops if the SwiftTerm revision or patch state is
@@ -33,13 +33,14 @@ unexpected. A direct `swift build` requires a prepared checkout.
   [OSC 22 patch](../patches/swiftterm-mouse-pointer-shapes.patch), [link cursor patch](../patches/swiftterm-link-cursor.patch)
 - The local-link resolver uses the pane’s PTY directory when opening a link. Command-hover
   shows the original target, and deferred `openDefault()` calls use the directory at the
-  time they run. Numeric URLs such as `tel:5551234` and `vscode:123` keep their usual policy.
+  time they run. The cursor caches the opening verdict while hovering. Numeric URLs
+  such as `tel:5551234` and `vscode:123` keep their usual policy.
   [Resolver patch](../patches/swiftterm-local-links.patch), [link policy patch](../patches/swiftterm-local-link-policy.patch)
 
 Unlimited scrollback grows the history buffer on demand instead of preallocating
 a large fixed limit. Limited mode keeps 0–1,000,000 lines above the visible screen;
 the default is 1,000. Changes apply to existing panes, and reducing the limit
-discards the oldest excess lines. Unlimited history stays in memory for the session.
+discards the oldest excess lines. Clearing unlimited history releases the discarded rows and their storage.
 [Patch](../patches/swiftterm-unlimited-scrollback.patch)
 
 Local links, including OSC 8 targets, resolve against the pane's current shell directory,

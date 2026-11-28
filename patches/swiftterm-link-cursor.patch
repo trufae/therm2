@@ -1,8 +1,8 @@
 diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-index 10a9f69..b0ebf42 100644
+index d9ca7d4..64cd481 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -2051,7 +2051,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2072,7 +2072,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      
      public override func cursorUpdate(with event: NSEvent)
      {
@@ -11,13 +11,14 @@ index 10a9f69..b0ebf42 100644
      }
  
      /// The pointer shown over the terminal while `modifiers` are held: the
-@@ -2071,18 +2071,28 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2101,18 +2101,29 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
  
      /// Reads the keys held now unless given, since an event's flags can miss a
      /// Shift held since before the cursor update AppKit sends after a rect change.
 -    private func setPointer(modifiers: NSEvent.ModifierFlags? = nil) {
 -        let modifiers = modifiers ?? heldModifierFlags()
 +    private func setPointer(at point: NSPoint, modifiers: NSEvent.ModifierFlags? = nil) {
++        guard let hit = hitTest(convert(point, to: superview)), isTerminalPointerView(hit) else { return }
          // AppKit calls cursorUpdate on every mouse move over the view and on every display
          // cycle that re-evaluates cursor rects. With a customized pointer (size or
          // colour in Accessibility settings) each set() re-renders the cursor image,
@@ -43,7 +44,7 @@ index 10a9f69..b0ebf42 100644
      /// The cursor the rect was last built with, so that a change of the rule
      /// makes AppKit build the rects again only when it changes the rect.
      private var cursorRectPointer: NSCursor?
-@@ -2166,21 +2176,22 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2207,33 +2218,31 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          if pointerCursor(modifiers: []) != cursorRectPointer {
              window.invalidateCursorRects(for: self)
          }
@@ -54,10 +55,14 @@ index 10a9f69..b0ebf42 100644
          }
      }
  
--    /// Whether the pointer is over this view where it shows: a visible window,
-+    /// The pointer location over this view where it shows: a visible window,
-     /// no hidden ancestor, and no other window or view above it at that point.
+-    /// Whether the pointer is over this view's text where it shows: a visible
+-    /// window, no hidden ancestor, and no other window or view above it at that
+-    /// point, the view's own subviews included, such as the find bar, whose
+-    /// fields show their own pointer. The Metal surface and the overlay of
+-    /// composed text count as the text.
 -    private func pointerIsOver(_ window: NSWindow) -> Bool {
++    /// The pointer location over terminal text in the topmost window.
++    /// Find controls supply their own pointer; Metal and composed text count as terminal text.
 +    private func pointerLocation(over window: NSWindow) -> NSPoint? {
          guard window.isVisible, !isHiddenOrHasHiddenAncestor,
                let contentView = window.contentView,
@@ -66,13 +71,29 @@ index 10a9f69..b0ebf42 100644
 +            return nil
          }
          let point = contentView.superview?.convert(location, from: nil) ?? location
--        return contentView.hitTest(point)?.isDescendant(of: self) == true
-+        guard contentView.hitTest(point)?.isDescendant(of: self) == true else { return nil }
+-        guard let hit = contentView.hitTest(point) else { return false }
+-        if hit === self || hit === markedTextOverlay {
+-            return true
+-        }
++        guard let hit = contentView.hitTest(point), isTerminalPointerView(hit) else { return nil }
 +        return convert(location, from: nil)
++    }
++
++    private func isTerminalPointerView(_ hit: NSView) -> Bool {
++        if hit === self || hit === markedTextOverlay { return true }
+ #if canImport(MetalKit)
+-        if let metalView, hit === metalView {
+-            return true
+-        }
+-#endif
++        return hit === metalView
++#else
+         return false
++#endif
      }
      
      func makeFirstResponder ()
-@@ -2294,13 +2305,13 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2347,13 +2356,13 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      func startTracking ()
      {
          if tracking == nil {
@@ -88,7 +109,7 @@ index 10a9f69..b0ebf42 100644
              addTrackingArea(tracking!)
          }
          startWindowMouseMovedFallback()
-@@ -2363,7 +2374,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2416,7 +2425,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          if commandActive {
              return true
          }
@@ -97,7 +118,7 @@ index 10a9f69..b0ebf42 100644
              return true
          }
          if linkHighlightMode == .hoverWithModifier && commandActive {
-@@ -2447,6 +2458,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2500,6 +2509,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          }
          keyboardRouter.flagsChanged(event)
          super.flagsChanged(with: event)
@@ -105,7 +126,7 @@ index 10a9f69..b0ebf42 100644
      }
      
      public override func mouseExited(with event: NSEvent) {
-@@ -3966,14 +3978,14 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4067,14 +4077,14 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      }
      
      public override func mouseMoved(with event: NSEvent) {
@@ -122,7 +143,7 @@ index 10a9f69..b0ebf42 100644
          if commandActive {
              if let payload = getPayload(for: event) as? String {
                  previewUrl (payload: payload)
-@@ -3982,7 +3994,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4083,7 +4093,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
              }
              reportLink(at: hit.grid)
          }

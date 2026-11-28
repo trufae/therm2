@@ -1,8 +1,8 @@
 diff --git a/Sources/SwiftTerm/Apple/AppleTerminalView.swift b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-index ffca579..e055644 100644
+index 5ed5b96..972b587 100644
 --- a/Sources/SwiftTerm/Apple/AppleTerminalView.swift
 +++ b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-@@ -5484,6 +5484,7 @@ struct WheelReportBudget {
+@@ -5491,6 +5491,7 @@ struct WheelReportBudget {
  
      private var allowance: Double = Double(Self.burst)
      private var stampNanoseconds: UInt64
@@ -10,7 +10,7 @@ index ffca579..e055644 100644
  
      init(nowNanoseconds: UInt64 = DispatchTime.now().uptimeNanoseconds) {
          stampNanoseconds = nowNanoseconds
-@@ -5522,6 +5523,29 @@ struct WheelReportBudget {
+@@ -5529,6 +5530,29 @@ struct WheelReportBudget {
          allowance -= Double(granted)
          return granted
      }
@@ -41,10 +41,10 @@ index ffca579..e055644 100644
  
  /// Fractional wheel or finger travel retained only within one gesture and one route.
 diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-index af5baf3..4980f52 100644
+index 64cd481..8ec20e0 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -4163,14 +4163,20 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4247,14 +4247,20 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
                    event.scrollingDeltaX, event.scrollingDeltaY, columns, rows, route.rawValue)
          }
          if route == .mouse || route == .cursorKeys {
@@ -72,7 +72,7 @@ index af5baf3..4980f52 100644
              }
          } else if rows != 0 {
              if rows > 0 { scrollUp(lines: rows) } else { scrollDown(lines: -rows) }
-@@ -4183,7 +4189,8 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4267,7 +4273,8 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
                              accumulator: inout WheelDistanceAccumulator<WheelRoute>) -> Int {
          guard delta.isFinite else { accumulator.reset(); return 0 }
          // Bound arithmetic before converting accelerated distance to Int.
@@ -82,7 +82,7 @@ index af5baf3..4980f52 100644
          if event.hasPreciseScrollingDeltas {
              return accumulator.takeWholeLines(distance: scaled, cellHeight: cellSize, route: route)
          }
-@@ -4193,12 +4200,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4277,12 +4284,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          return rounded != 0 ? rounded : (delta > 0 ? 1 : -1)
      }
  

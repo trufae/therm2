@@ -1,5 +1,5 @@
 diff --git a/Sources/SwiftTerm/Buffer.swift b/Sources/SwiftTerm/Buffer.swift
-index 20e714f..243dd9b 100644
+index 20e714f..055c36a 100644
 --- a/Sources/SwiftTerm/Buffer.swift
 +++ b/Sources/SwiftTerm/Buffer.swift
 @@ -861,7 +861,7 @@ public final class Buffer {
@@ -38,7 +38,25 @@ index 20e714f..243dd9b 100644
      public func getNullCell (attribute: Attribute? = nil) -> CharData
      {
          let fgbg = attribute == nil ? Attribute.empty : attribute!.justColor ()
-@@ -1767,6 +1780,7 @@ public final class Buffer {
+@@ -1191,9 +1204,17 @@ public final class Buffer {
+         lines.trimStart (count: amountToTrim)
+         yBase = 0
+         yDisp = 0
++        shrinkUnlimitedScrollbackStorage()
+         // savedY is relative to the screen, which doesn't move here.
+     }
+ 
++    /// Release trimmed rows and let unlimited history grow on demand again.
++    func shrinkUnlimitedScrollbackStorage() {
++        if scrollback == -1, lines.count < lines.maxLength {
++            lines.maxLength = lines.count
++        }
++    }
++
+     public func changeHistorySize (_ newScrollback: Int?)
+     {
+         self.scrollback = newScrollback
+@@ -1767,6 +1788,7 @@ public final class Buffer {
                  continue
              }
              let linesToAdd = destLineLengths.count - wrappedLines.count
@@ -47,10 +65,18 @@ index 20e714f..243dd9b 100644
              var trimmedLines: Int
              if yBase == 0 && self.y != lines.count - 1 {
 diff --git a/Sources/SwiftTerm/Terminal.swift b/Sources/SwiftTerm/Terminal.swift
-index a60121d..f155696 100644
+index 0bef609..8efe181 100644
 --- a/Sources/SwiftTerm/Terminal.swift
 +++ b/Sources/SwiftTerm/Terminal.swift
-@@ -8668,6 +8668,7 @@ open class Terminal {
+@@ -4918,6 +4918,7 @@ open class Terminal {
+                 buffer.linesTop = 0
+                 buffer.yBase = max (buffer.yBase - scrollBackSize, 0)
+                 buffer.yDisp = max (buffer.yDisp - scrollBackSize, 0)
++                buffer.shrinkUnlimitedScrollbackStorage()
+             }
+             break;
+         default:
+@@ -8677,6 +8678,7 @@ open class Terminal {
                           lines: borrowing CircularBufferLineList,
                           wrapCause: BufferLine.WrapCause)
      {
@@ -70,3 +96,37 @@ index 987b480..71496c9 100644
      public var scrollback: Int
      /// Default size of the tabs, defaults to 8
      public var tabStopWidth: Int
+diff --git a/Tests/SwiftTermTests/UnlimitedScrollbackTests.swift b/Tests/SwiftTermTests/UnlimitedScrollbackTests.swift
+new file mode 100644
+index 0000000..d074bb1
+--- /dev/null
++++ b/Tests/SwiftTermTests/UnlimitedScrollbackTests.swift
+@@ -0,0 +1,28 @@
++import Testing
++@testable import SwiftTerm
++
++struct UnlimitedScrollbackTests {
++    @Test(arguments: [false, true]) func clearingHistoryReleasesRows(eraseSavedLines: Bool) {
++        let (terminal, _) = TerminalTestHarness.makeTerminal(cols: 20, rows: 4, scrollback: -1)
++        terminal.feed(text: String(repeating: "history\r\n", count: 2_000) + "visible")
++        let buffer = terminal.normalBuffer
++        weak var oldestRow = buffer.lines[0]
++        #expect(buffer.lines.count > terminal.rows)
++        #expect(oldestRow != nil)
++
++        if eraseSavedLines {
++            terminal.feed(text: "\u{1b}[3J")
++        } else {
++            terminal.clearScrollback()
++        }
++
++        #expect(buffer.lines.count == terminal.rows)
++        #expect(buffer.lines.maxLength == terminal.rows)
++        #expect(oldestRow == nil)
++        #expect(terminal.getCharacter(col: 0, row: terminal.rows - 1) == "v")
++
++        terminal.feed(text: "\r\nregrown")
++        #expect(buffer.yBase == 1)
++        #expect(buffer.scrollback == -1)
++    }
++}

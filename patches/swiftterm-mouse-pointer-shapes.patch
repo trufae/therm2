@@ -12,10 +12,10 @@ index 3af92b2..f0ded85 100644
      fileprivate var mask: UInt32 { 1 << UInt32(rawValue) }
  }
 diff --git a/Sources/SwiftTerm/Buffer.swift b/Sources/SwiftTerm/Buffer.swift
-index 29ef08f..c18c7f0 100644
+index 5d00d80..70a2f03 100644
 --- a/Sources/SwiftTerm/Buffer.swift
 +++ b/Sources/SwiftTerm/Buffer.swift
-@@ -2337,4 +2337,8 @@ public final class Buffer {
+@@ -2345,4 +2345,8 @@ public final class Buffer {
          }
      }    
  #endif
@@ -83,12 +83,12 @@ index ed6115c..1c3ad17 100644
          case 104:  terminal.oscResetColor(data)
          case 110:  terminal.oscResetDynamicColor(foreground: true)
 diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-index 4980f52..0913880 100644
+index 8ec20e0..baa8633 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -2079,14 +2079,31 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
-     /// return shared cursors such as `NSCursor.arrow`, since the view compares
-     /// them by identity to skip work when nothing changed.
+@@ -2094,10 +2094,26 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+     /// every view, as with split panes, use a local `NSEvent` monitor for
+     /// `.flagsChanged`, as the view does while the application receives the mouse.
      open func pointerCursor(modifiers: NSEvent.ModifierFlags) -> NSCursor {
 -        guard allowMouseReporting && currentMouseMode != .off else { return .iBeam }
 -        let shiftSelects = modifiers.contains(.shift) && !mouseShiftCaptureState.withLock { $0 }
@@ -117,12 +117,7 @@ index 4980f52..0913880 100644
  
      /// Reads the keys held now unless given, since an event's flags can miss a
      /// Shift held since before the cursor update AppKit sends after a rect change.
-     private func setPointer(at point: NSPoint, modifiers: NSEvent.ModifierFlags? = nil) {
-+        guard let hit = hitTest(convert(point, to: superview)), isTerminalPointerView(hit) else { return }
-         // AppKit calls cursorUpdate on every mouse move over the view and on every display
-         // cycle that re-evaluates cursor rects. With a customized pointer (size or
-         // colour in Accessibility settings) each set() re-renders the cursor image,
-@@ -2105,6 +2122,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2121,6 +2137,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          let hit = calculateMouseHit(at: point).grid
          let command = modifiers.contains(.command)
          updateHoverLink(at: hit, commandOverride: command)
@@ -130,29 +125,7 @@ index 4980f52..0913880 100644
          return linkForClick(at: hit, hasCommandModifier: command) == nil ? cursor : .pointingHand
      }
  
-@@ -2205,9 +2223,20 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
-             return nil
-         }
-         let point = contentView.superview?.convert(location, from: nil) ?? location
--        guard contentView.hitTest(point)?.isDescendant(of: self) == true else { return nil }
-+        guard let hit = contentView.hitTest(point), isTerminalPointerView(hit) else { return nil }
-         return convert(location, from: nil)
-     }
-+
-+    // Find fields and other controls supply their own cursor. The Metal
-+    // surface and the overlay for composed text are part of the terminal.
-+    private func isTerminalPointerView(_ hit: NSView) -> Bool {
-+        if hit === self || hit === markedTextOverlay { return true }
-+#if canImport(MetalKit)
-+        return hit === metalView
-+#else
-+        return false
-+#endif
-+    }
-     
-     func makeFirstResponder ()
-     {
-@@ -4350,6 +4379,14 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4434,6 +4451,14 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      /// terminal lock.
      nonisolated private let mouseShiftCaptureState = Locked(false)
  
@@ -167,7 +140,7 @@ index 4980f52..0913880 100644
      /// The mouse reporting mode the program in the terminal last asked for,
      /// `.off` when it has none. Hosts that give a click their own meaning, such
      /// as a control-click context menu, can check it to leave the click to the
-@@ -4379,6 +4416,8 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4463,6 +4488,8 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
                  deregisterTrackingInterest()
              }
              pointerRuleChanged()
@@ -176,7 +149,7 @@ index 4980f52..0913880 100644
          case .bell:
              deliverBell()
          case .programStatusChanged:
-@@ -4450,6 +4489,15 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4534,6 +4561,15 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          mouseShiftCaptureState.withLock { $0 = source.mouseShiftCapture }
          eventQueue.post(.mouseModeChanged)
      }
@@ -264,7 +237,7 @@ index 0000000..52449fb
 +    }
 +}
 diff --git a/Sources/SwiftTerm/Terminal.swift b/Sources/SwiftTerm/Terminal.swift
-index 906998a..1a3591c 100644
+index fcab3af..18767ad 100644
 --- a/Sources/SwiftTerm/Terminal.swift
 +++ b/Sources/SwiftTerm/Terminal.swift
 @@ -140,6 +140,14 @@ public protocol TerminalDelegate: AnyObject {
@@ -282,7 +255,7 @@ index 906998a..1a3591c 100644
      
      /**
       * This method is invoked when a request to change the cursor style has been issued
-@@ -1379,6 +1387,7 @@ open class Terminal {
+@@ -1389,6 +1397,7 @@ open class Terminal {
          if buffer === normalBuffer {
              return
          }
@@ -290,7 +263,7 @@ index 906998a..1a3591c 100644
          semanticNoteAlternateScreenSwitch()
  
          // A full-screen program can sit over thousands of normal-buffer scrollback lines. While
-@@ -1402,12 +1411,14 @@ open class Terminal {
+@@ -1412,12 +1421,14 @@ open class Terminal {
          _buffer = normalBuffer
          kittyGraphicsState.activeIsAlternate = false
          kittyGraphicsDidActivateScreen()
@@ -305,7 +278,7 @@ index 906998a..1a3591c 100644
          semanticNoteAlternateScreenSwitch()
          altBuffer.x = normalBuffer.x
          altBuffer.y = normalBuffer.y
-@@ -1422,6 +1433,7 @@ open class Terminal {
+@@ -1432,6 +1443,7 @@ open class Terminal {
          kittyGraphicsState.activeIsAlternate = true
          clearKittyImages(in: altBuffer, isAlternateBuffer: true)
          kittyGraphicsDidActivateScreen()
@@ -313,7 +286,7 @@ index 906998a..1a3591c 100644
      }
  
      private func resizeNormalBufferToCurrentGridIfNeeded() {
-@@ -1459,7 +1471,10 @@ open class Terminal {
+@@ -1469,7 +1481,10 @@ open class Terminal {
          _rows = max (options.rows, MINIMUM_ROWS)
          
          if isReset {
@@ -324,7 +297,7 @@ index 906998a..1a3591c 100644
              resetNormalBuffer()
              activateNormalBuffer(clearAlt: false)
              // A full reset also clears the alternate screen, even when it is not
-@@ -1467,6 +1482,7 @@ open class Terminal {
+@@ -1477,6 +1492,7 @@ open class Terminal {
              clearKittyImages(in: altBuffer, isAlternateBuffer: true)
              altBuffer.clear ()
              resetSemanticPromptState(clearingScreenMarks: true)
@@ -332,7 +305,7 @@ index 906998a..1a3591c 100644
          } else {
              normalBuffer.resize(newCols: cols, newRows: rows)
              altBuffer.resize(newCols: cols, newRows: rows)
-@@ -10638,6 +10654,10 @@ final class ViewTerminal: Terminal {
+@@ -10660,6 +10676,10 @@ final class ViewTerminal: Terminal {
  
  // Default implementations
  public extension TerminalDelegate {
@@ -344,10 +317,10 @@ index 906998a..1a3591c 100644
  
      func cursorStyleChanged (source: Terminal, newStyle: CursorStyle)
 diff --git a/Sources/SwiftTerm/iOS/iOSTerminalView.swift b/Sources/SwiftTerm/iOS/iOSTerminalView.swift
-index ad73036..17b4480 100644
+index e35e54d..c3e2e52 100644
 --- a/Sources/SwiftTerm/iOS/iOSTerminalView.swift
 +++ b/Sources/SwiftTerm/iOS/iOSTerminalView.swift
-@@ -3838,6 +3838,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
+@@ -3885,6 +3885,9 @@ open class TerminalView: UIScrollView, UITextInputTraits, UIKeyInput, UIScrollVi
          case .mouseModeChanged:
              // iOS has no tracking-area equivalent to update.
              break
@@ -358,10 +331,10 @@ index ad73036..17b4480 100644
              deliverBell()
          case .programStatusChanged:
 diff --git a/Tests/SwiftTermTests/MacPointerCursorTests.swift b/Tests/SwiftTermTests/MacPointerCursorTests.swift
-index 06d6444..08195cb 100644
+index 4e1c5b0..8e832a6 100644
 --- a/Tests/SwiftTermTests/MacPointerCursorTests.swift
 +++ b/Tests/SwiftTermTests/MacPointerCursorTests.swift
-@@ -29,6 +29,47 @@ struct MacPointerCursorTests {
+@@ -30,6 +30,47 @@ struct MacPointerCursorTests {
          #expect(view.pointerCursor(modifiers: []) === NSCursor.iBeam)
      }
  
@@ -409,7 +382,7 @@ index 06d6444..08195cb 100644
      @Test func mouseReportingShowsTheArrow() {
          let view = makeView()
          view.feed(text: "\(esc)[?1000h\(esc)[?1006h")
-@@ -106,6 +147,35 @@ struct MacPointerCursorTests {
+@@ -107,6 +148,35 @@ struct MacPointerCursorTests {
          return window
      }
  

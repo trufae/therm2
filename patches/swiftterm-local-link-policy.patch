@@ -1,8 +1,8 @@
 diff --git a/Sources/SwiftTerm/Apple/AppleTerminalView.swift b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-index 2a4f2d7..c0e9171 100644
+index 972b587..1ad7b51 100644
 --- a/Sources/SwiftTerm/Apple/AppleTerminalView.swift
 +++ b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-@@ -2666,6 +2666,9 @@ extension TerminalView {
+@@ -2669,6 +2669,9 @@ extension TerminalView {
          let directory = source.hostCurrentDirectory
          onMain { [weak self] in
              guard let self else { return }
@@ -121,10 +121,10 @@ index 3ba7a15..0eb3bcc 100644
      open func requestOpenLink (source: TerminalView, request: TerminalLinkRequest)
      {
 diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-index 0913880..569120e 100644
+index baa8633..968f5fb 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -1887,11 +1887,6 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -1893,11 +1893,6 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      /// `.explicit` = OSC 8 only, `.implicit` = explicit + implicit fallback, `.none` = off.
      public var linkReporting: LinkReporting = .implicit
  
@@ -136,7 +136,66 @@ index 0913880..569120e 100644
      /// Controls link highlighting and link activation behavior.
      public var linkHighlightMode: LinkHighlightMode = .hoverWithModifier {
          didSet {
-@@ -3924,6 +3919,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -2129,16 +2124,47 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         }
+     }
+ 
+-    // Use the click policy so the hand only appears when a link can be activated.
++    /// Whether the cursor follows SwiftTerm's default opening policy. Hosts
++    /// that handle link requests themselves can use the visibility rules alone.
++    public var usesDefaultLinkPolicyForCursor = true {
++        didSet { cursorLinkDecision = nil }
++    }
++    private var cursorLinkDecision: (link: String, explicit: Bool, directory: String?,
++                                     resolvesAgainstShell: Bool, allowed: Bool)?
++
+     func pointerCursor(at point: NSPoint, modifiers: NSEvent.ModifierFlags) -> NSCursor {
+         let cursor = pointerCursor(modifiers: modifiers)
+         guard visibleRect.contains(point),
+-              point.x < getEffectiveWidth(size: bounds.size) else { return cursor }
++              point.x < getEffectiveWidth(size: bounds.size) else {
++            cursorLinkDecision = nil
++            return cursor
++        }
+         let hit = calculateMouseHit(at: point).grid
+         let command = modifiers.contains(.command)
+         updateHoverLink(at: hit, commandOverride: command)
+         guard currentMousePointerShape == nil else { return cursor }
+-        return linkForClick(at: hit, hasCommandModifier: command) == nil ? cursor : .pointingHand
++        guard let link = linkForClick(at: hit, hasCommandModifier: command) else {
++            cursorLinkDecision = nil
++            return cursor
++        }
++        return cursorAllowsLink(link.link, isExplicit: link.isExplicit) ? .pointingHand : cursor
++    }
++
++    private func cursorAllowsLink(_ link: String, isExplicit: Bool) -> Bool {
++        guard allowsLink(isExplicit: isExplicit) else { return false }
++        guard usesDefaultLinkPolicyForCursor else { return true }
++        let directory = withTerminal { $0.hostCurrentDirectory }
++        if let cached = cursorLinkDecision, cached.link == link, cached.explicit == isExplicit,
++           cached.directory == directory, cached.resolvesAgainstShell == resolvesLinksAgainstShellDirectory {
++            return cached.allowed
++        }
++
++        // Reuse the verdict while hovering; opening a link still checks it again.
++        let target = linkTarget(link, isExplicit: isExplicit)
++        let allowed: Bool
++        if case .deny = target.decision { allowed = false } else { allowed = true }
++        cursorLinkDecision = (link, isExplicit, directory, resolvesLinksAgainstShellDirectory, allowed)
++        return allowed
+     }
+ 
+     /// The cursor the rect was last built with, so that a change of the rule
+@@ -2530,6 +2556,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+     }
+     
+     public override func mouseExited(with event: NSEvent) {
++        cursorLinkDecision = nil
+         turnOffUrlPreview()
+         if linkHighlightMode == .hover || linkHighlightMode == .hoverWithModifier {
+             let oldRange = linkHighlightRange
+@@ -3996,6 +4023,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      }
      
      var urlPreview: NSTextField?
@@ -144,7 +203,7 @@ index 0913880..569120e 100644
      private var lastReportedLink: String?
      func previewUrl (payload: String)
      {
-@@ -3932,10 +3928,30 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4004,10 +4032,30 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
              return
          }
          if let (target, _) = urlAndParamsFrom(payload: payload) {
@@ -178,7 +237,7 @@ index 0913880..569120e 100644
              } else {
                  let nup: NSTextField
                  if #available(macOS 10.12, *) {
-@@ -3955,8 +3971,16 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4027,8 +4075,16 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          }
      }
      
@@ -195,7 +254,7 @@ index 0913880..569120e 100644
          if let urlPreview = self.urlPreview {
              urlPreview.removeFromSuperview()
              self.urlPreview = nil
-@@ -4713,7 +4737,55 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4785,7 +4841,58 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      /// names another host, detected paths do not open, with either value.
      /// `LocalProcessTerminalView` sets it to true. A local shell can still
      /// start a remote session, for example with ssh; SwiftTerm cannot see that.
@@ -224,9 +283,9 @@ index 0913880..569120e 100644
 +    /// directory. Recognized numeric targets such as "custom:123" and
 +    /// "vscode:123" are treated as URLs and bypass the resolver.
 +    ///
-+    /// The view calls the resolver on the main thread, including for the OSC 8
-+    /// preview while the Command key is down if `usesDefaultLinkPolicyForPreview`
-+    /// is true.
++    /// The view calls the resolver on the main thread. It can also resolve
++    /// links for the cursor or preview when their respective default policies
++    /// are enabled.
 +    /// Keep the resolver fast and do not block.
 +    /// Preview resolution is cached until it closes or the resolver or shell
 +    /// directory changes. Clicks always resolve and check the file again.
@@ -234,7 +293,10 @@ index 0913880..569120e 100644
 +    /// `requestOpenLink(source:request:)` and call `request.openDefault(_:)` later.
 +    @MainActor
 +    public var localLinkResolver: (@MainActor (String, URL?) -> URL?)? {
-+        didSet { removePreviewUrl() }
++        didSet {
++            removePreviewUrl()
++            cursorLinkDecision = nil
++        }
 +    }
 +
 +    /// Whether the Command-hover preview of an OSC 8 link shows the target
@@ -252,7 +314,7 @@ index 0913880..569120e 100644
  }
  
  extension TerminalView: @MainActor NSTextInputClient {}
-@@ -4839,6 +4911,7 @@ extension TerminalView {
+@@ -4911,6 +5018,7 @@ extension TerminalView {
      /// the scheme must not take the link.
      nonisolated static let numericURLSchemes: Set<String> = [
          "tel", "sms", "facetime", "facetime-audio", "callto", "fax",
@@ -412,7 +474,7 @@ index d79bbf8..4bce6c1 100644
          }
  
 diff --git a/Sources/SwiftTerm/Terminal.swift b/Sources/SwiftTerm/Terminal.swift
-index 1a3591c..1e58a45 100644
+index 18767ad..f645d8a 100644
 --- a/Sources/SwiftTerm/Terminal.swift
 +++ b/Sources/SwiftTerm/Terminal.swift
 @@ -156,11 +156,12 @@ public protocol TerminalDelegate: AnyObject {
@@ -432,7 +494,7 @@ index 1a3591c..1e58a45 100644
       */
      func hostCurrentDirectoryUpdated (source: Terminal)
      
-@@ -8550,6 +8551,7 @@ open class Terminal {
+@@ -8569,6 +8570,7 @@ open class Terminal {
          options.rows = rows
          options.cols = cols
          let savedCursorHidden = cursorHidden
@@ -440,7 +502,7 @@ index 1a3591c..1e58a45 100644
          setup (isReset: true)
          clearAllKittyImages()
          cursorHidden = savedCursorHidden
-@@ -8563,6 +8565,9 @@ open class Terminal {
+@@ -8582,6 +8584,9 @@ open class Terminal {
          // contentOffset of a buffer that no longer exists and renders blank until
          // some unrelated layout pass happens to correct it.
          tdel?.bufferActivated (source: self)
@@ -550,6 +612,53 @@ index d6c6a61..bef5643 100644
      @Test @MainActor func customSchemeConfirmationDefaultsToCancel() throws {
          let url = try #require(URL(string: "ssh://example.com"))
          let alert = TerminalLinkOpening.confirmationAlert(for: url, displayString: url.absoluteString)
+diff --git a/Tests/SwiftTermTests/MacLinkCursorPolicyTests.swift b/Tests/SwiftTermTests/MacLinkCursorPolicyTests.swift
+new file mode 100644
+index 0000000..7933ef8
+--- /dev/null
++++ b/Tests/SwiftTermTests/MacLinkCursorPolicyTests.swift
+@@ -0,0 +1,41 @@
++#if os(macOS)
++import AppKit
++import Testing
++@testable import SwiftTerm
++
++@MainActor
++struct MacLinkCursorPolicyTests {
++    @Test func blockedFileKeepsTheTextCursor() throws {
++        let view = TerminalView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
++        let missing = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".txt")
++        view.feed(text: "\u{1b}]8;;\(missing.absoluteString)\u{7}x\u{1b}]8;;https://example.test\u{7}y\u{1b}]8;;\u{7}")
++        let cell = try #require(view.cellDimension)
++        let y = view.bounds.maxY - cell.height / 2
++        let filePoint = NSPoint(x: cell.width / 2, y: y)
++        let webPoint = NSPoint(x: cell.width * 1.5, y: y)
++
++        #expect(view.pointerCursor(at: filePoint, modifiers: .command) === NSCursor.iBeam)
++        #expect(view.pointerCursor(at: webPoint, modifiers: .command) === NSCursor.pointingHand)
++
++        view.usesDefaultLinkPolicyForCursor = false
++        #expect(view.pointerCursor(at: filePoint, modifiers: .command) === NSCursor.pointingHand)
++    }
++
++    @Test func missingRelativeLinkOnlyConsultsTheResolverOncePerHover() throws {
++        let view = TerminalView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
++        var resolutions = 0
++        view.localLinkResolver = { _, _ in
++            resolutions += 1
++            return nil
++        }
++        view.feed(text: "\u{1b}]8;;./missing-notes.txt\u{7}x\u{1b}]8;;\u{7}")
++        let cell = try #require(view.cellDimension)
++        let point = NSPoint(x: cell.width / 2, y: view.bounds.maxY - cell.height / 2)
++
++        for _ in 0..<3 {
++            #expect(view.pointerCursor(at: point, modifiers: .command) === NSCursor.iBeam)
++        }
++        #expect(resolutions == 1)
++    }
++}
++#endif
 diff --git a/Tests/SwiftTermTests/MacUntrustedLinkTests.swift b/Tests/SwiftTermTests/MacUntrustedLinkTests.swift
 index d02e723..18dee4f 100644
 --- a/Tests/SwiftTermTests/MacUntrustedLinkTests.swift

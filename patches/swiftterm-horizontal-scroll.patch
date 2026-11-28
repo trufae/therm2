@@ -1,8 +1,8 @@
 diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-index 00e1105..10a9f69 100644
+index 99b4c61..6024e73 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -4067,6 +4067,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4153,6 +4153,7 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      /// route: travel that was reported to the application never scrolls locally when Option
      /// arrives, and locally scrolled travel never becomes a report when Option lifts.
      private var scrollAccumulator = WheelDistanceAccumulator<WheelRoute>()
@@ -10,7 +10,7 @@ index 00e1105..10a9f69 100644
      private var wheelReportBudget = WheelReportBudget()
  
      /// Why this wheel event belongs to SwiftTerm. Keeping bypass and alternate-scroll decisions
-@@ -4090,141 +4091,115 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+@@ -4176,141 +4177,115 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
          ProcessInfo.processInfo.environment["SWIFTTERM_MOUSE_LOG"] == "1"
  
      public override func scrollWheel(with event: NSEvent) {

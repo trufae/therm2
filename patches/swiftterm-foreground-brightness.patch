@@ -1,25 +1,8 @@
---- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
-+++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -1454,6 +1454,16 @@
-         didSet {
-             guard collapseBrightColorsToBase != oldValue else { return }
-             colorsChanged ()
-+        }
-+    }
-+
-+    /// Multiplies rendered foreground RGB without changing any cell backgrounds.
-+    /// Includes ANSI and truecolor text; 1 preserves the program's colors.
-+    public var foregroundBrightness: CGFloat = 1 {
-+        didSet {
-+            foregroundBrightness = foregroundBrightness.isFinite ? min(1, max(0, foregroundBrightness)) : 1
-+            guard foregroundBrightness != oldValue else { return }
-+            colorsChanged()
-         }
-     }
- 
+diff --git a/Sources/SwiftTerm/Apple/AppleTerminalView.swift b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
+index 9160774..5ed5b96 100644
 --- a/Sources/SwiftTerm/Apple/AppleTerminalView.swift
 +++ b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-@@ -538,6 +538,7 @@
+@@ -579,6 +579,7 @@ struct FrameViewState: Sendable {
      let useBrightColors: Bool
      let collapseBrightColorsToBase: Bool
      let minimumContrastRatio: CGFloat
@@ -27,7 +10,7 @@
      let translucentCellBackgrounds: Bool
      let bidiHostPolicy: BidiHostPolicy
      let glyphFallbackProvider: (any TerminalGlyphFallbackProvider)?
-@@ -583,6 +584,11 @@
+@@ -626,6 +627,11 @@ struct FrameViewState: Sendable {
          useBrightColors = view.useBrightColors
          collapseBrightColorsToBase = view.collapseBrightColorsToBase
          minimumContrastRatio = view.minimumContrastRatio
@@ -39,7 +22,7 @@
  #if os(macOS)
          translucentCellBackgrounds = view.translucentCellBackgrounds
  #else
-@@ -665,6 +671,7 @@
+@@ -722,6 +728,7 @@ struct SnapshotRenderContext {
      let useBrightColors: Bool
      let collapseBrightColorsToBase: Bool
      let minimumContrastRatio: CGFloat
@@ -47,7 +30,7 @@
      /// The alpha explicit cell backgrounds are drawn with, or nil when they
      /// stay opaque. Set when `translucentCellBackgrounds` is on and the
      /// default background is translucent; it is the default background's own
-@@ -729,11 +736,11 @@
+@@ -802,11 +809,11 @@ struct SnapshotRenderContext {
          effectiveForegroundColor = nativeColors.effectiveForegroundColor
          effectiveBackgroundColor = nativeColors.effectiveBackgroundColor
          selectedTextBackgroundColor = nativeColors.selectedTextBackgroundColor
@@ -61,7 +44,7 @@
          ansiColors = nativeColors.ansiColors
          selection = SnapshotSelectionResolver(style: style, cols: cols)
          textBlinkVisible = style.textBlinkVisible
-@@ -745,6 +752,7 @@
+@@ -818,6 +825,7 @@ struct SnapshotRenderContext {
          useBrightColors = viewState.useBrightColors
          collapseBrightColorsToBase = viewState.collapseBrightColorsToBase
          minimumContrastRatio = viewState.minimumContrastRatio
@@ -69,7 +52,7 @@
          let defaultBackgroundAlpha = effectiveBackgroundColor.cgColor.alpha
          if viewState.translucentCellBackgrounds && defaultBackgroundAlpha < 1 {
              translucentCellBackgroundAlpha = defaultBackgroundAlpha
-@@ -778,6 +786,7 @@
+@@ -863,6 +871,7 @@ struct SnapshotRenderContext {
          identityHasher.combine(useBrightColors)
          identityHasher.combine(collapseBrightColorsToBase)
          identityHasher.combine(minimumContrastRatio)
@@ -77,29 +60,21 @@
          identityHasher.combine(translucentCellBackgroundAlpha)
          identity = UInt64(bitPattern: Int64(identityHasher.finalize()))
      }
-@@ -2712,6 +2721,9 @@
+@@ -2867,6 +2876,9 @@ extension TerminalView {
+         if flags.contains (.dim) {
              fgColor = fgColor.dimmedColor (towards: bgColor)
          }
-         fgColor = fgColor.withContrast (atLeast: minimumContrastRatio, against: bgColor)
 +#if os(macOS)
 +        fgColor = fgColor.withBrightness(foregroundBrightness)
 +#endif
+         fgColor = fgColor.withContrast (atLeast: minimumContrastRatio, against: bgColor)
          var nsattr: [NSAttributedString.Key:Any] = [
              .font: tf,
-             .foregroundColor: fgColor,
---- a/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
-+++ b/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
-@@ -173,6 +173,7 @@
-         useBrightColors = view.useBrightColors
-         collapseBrightColorsToBase = view.collapseBrightColorsToBase
-         minimumContrastRatio = view.minimumContrastRatio
-+        foregroundBrightness = 1
-         bidiHostPolicy = view.bidiHostPolicy
-         glyphFallbackProvider = view.glyphFallbackProvider
-     }
+diff --git a/Sources/SwiftTerm/Apple/ColorContrast+Apple.swift b/Sources/SwiftTerm/Apple/ColorContrast+Apple.swift
+index 27432bc..690f910 100644
 --- a/Sources/SwiftTerm/Apple/ColorContrast+Apple.swift
 +++ b/Sources/SwiftTerm/Apple/ColorContrast+Apple.swift
-@@ -19,6 +19,13 @@
+@@ -19,6 +19,13 @@ import UIKit
  let SwiftTermShapeColorKey = NSAttributedString.Key("SwiftTermShapeColor")
  
  extension TTColor {
@@ -113,9 +88,23 @@
      /// This color, darkened or lightened as little as possible to reach `minimumRatio` against `background`.
      func withContrast(atLeast minimumRatio: CGFloat, against background: TTColor) -> TTColor {
          guard minimumRatio > 1,
+diff --git a/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift b/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
+index 8aed1ba..5a33bf4 100644
+--- a/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
++++ b/Sources/SwiftTerm/Apple/ExternalRenderOwner.swift
+@@ -173,6 +173,7 @@ extension FrameViewState {
+         useBrightColors = view.useBrightColors
+         collapseBrightColorsToBase = view.collapseBrightColorsToBase
+         minimumContrastRatio = view.minimumContrastRatio
++        foregroundBrightness = 1
+         bidiHostPolicy = view.bidiHostPolicy
+         glyphFallbackProvider = view.glyphFallbackProvider
+     }
+diff --git a/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift b/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift
+index ec08185..17c4fde 100644
 --- a/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift
 +++ b/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift
-@@ -125,6 +125,8 @@
+@@ -125,6 +125,8 @@ final class SnapshotTextBuilder {
      /// kept with its inputs.
      private var contrastedColors: [ContrastedColorKey: (adjusted: PlainColor, foreground: TTColor, background: TTColor)] = [:]
      private var contrastRatio: CGFloat = 1
@@ -124,19 +113,20 @@
  
      private struct FallbackFontKey: Hashable {
          let baseFont: ObjectIdentifier
-@@ -339,9 +341,10 @@
+@@ -366,9 +368,9 @@ final class SnapshotTextBuilder {
              // still applies to it, as it does to any other color.
              foregroundColor = linkColor
          }
 -        let shapeColor = foregroundColor
+-        foregroundColor = foregroundColor.withContrast(atLeast: context.minimumContrastRatio,
+-                                                       against: backgroundColor)
 +        let shapeColor = foregroundColor.withBrightness(context.foregroundBrightness)
-         foregroundColor = foregroundColor.withContrast(atLeast: context.minimumContrastRatio,
-                                                        against: backgroundColor)
-+            .withBrightness(context.foregroundBrightness)
++        foregroundColor = shapeColor.withContrast(atLeast: context.minimumContrastRatio,
++                                                   against: backgroundColor)
          // SwiftTerm owns cell placement. A BiDi layout is already in visual
          // order, and rows on the legacy and explicit-LTR paths must keep
          // logical cell order, so CoreText must not reorder anything. Every row
-@@ -365,6 +368,7 @@
+@@ -392,6 +394,7 @@ final class SnapshotTextBuilder {
          if flags.contains(.underline) {
              let color = attribute.underlineColor.map {
                  mapColor(color: $0, isFg: true, isBold: false, context: context)
@@ -144,19 +134,18 @@
              } ?? foregroundColor
              let variant = attribute.underlineStyle == .none ? UnderlineStyle.single : attribute.underlineStyle
              result[.underlineColor] = color
-@@ -867,8 +871,9 @@
+@@ -915,8 +918,8 @@ final class SnapshotTextBuilder {
              foregroundColor = .color(dimmedColor(foregroundColor, towards: backgroundColor,
                                                   context: context))
          }
 -        let shapeColor = foregroundColor
 -        foregroundColor = contrastedColor(foregroundColor, against: backgroundColor, context: context)
 +        let shapeColor = brightnessColor(foregroundColor, context: context)
-+        foregroundColor = brightnessColor(
-+            contrastedColor(foregroundColor, against: backgroundColor, context: context), context: context)
++        foregroundColor = contrastedColor(shapeColor, against: backgroundColor, context: context)
          var style = PlainRunStyle(fontIndex: fontIndex,
                                    foreground: foregroundColor,
                                    shapeColor: shapeColor,
-@@ -880,7 +885,7 @@
+@@ -928,7 +931,7 @@ final class SnapshotTextBuilder {
          }
          if flags.contains(.underline) {
              let color = attribute.underlineColor.map {
@@ -165,12 +154,10 @@
              } ?? foregroundColor
              let variant = attribute.underlineStyle == .none ? UnderlineStyle.single : attribute.underlineStyle
              style.underline = PlainUnderline(color: color,
-@@ -932,6 +937,21 @@
-         case .color(let color):
-             return color
+@@ -982,6 +985,21 @@ final class SnapshotTextBuilder {
          }
-+    }
-+
+     }
+ 
 +    private func brightnessColor(_ color: PlainColor, context: SnapshotRenderContext) -> PlainColor {
 +        let factor = context.foregroundBrightness
 +        guard factor < 1 else { return color }
@@ -184,6 +171,55 @@
 +        // Retain object-valued inputs so cache keys cannot outlive their identities.
 +        brightnessColors[color.key] = (adjusted, color)
 +        return adjusted
++    }
++
+     private func dimmedColor (_ foreground: PlainColor, towards background: PlainColor,
+                               context: SnapshotRenderContext) -> TTColor
+     {
+diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+index 6024e73..c33e715 100644
+--- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
++++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+@@ -1513,6 +1513,16 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
+         }
      }
  
-     private func dimmedColor (_ foreground: PlainColor, towards background: PlainColor,
++    /// Multiplies rendered foreground RGB without changing any cell backgrounds.
++    /// Includes ANSI and truecolor text; 1 preserves the program's colors.
++    public var foregroundBrightness: CGFloat = 1 {
++        didSet {
++            foregroundBrightness = foregroundBrightness.isFinite ? min(1, max(0, foregroundBrightness)) : 1
++            guard foregroundBrightness != oldValue else { return }
++            colorsChanged()
++        }
++    }
++
+     /// The least contrast, as a WCAG ratio from 1 to 21, that text keeps against its background. Text whose colors
+     /// fall below it, such as colors a program picked for a background of the other brightness, is darkened or
+     /// lightened just enough to reach it. Powerline separators, box drawing, and block elements keep their colors.
+diff --git a/Tests/SwiftTermTests/ColorContrastTests.swift b/Tests/SwiftTermTests/ColorContrastTests.swift
+index 49de1d4..ac94c8b 100644
+--- a/Tests/SwiftTermTests/ColorContrastTests.swift
++++ b/Tests/SwiftTermTests/ColorContrastTests.swift
+@@ -75,6 +75,21 @@ final class ColorContrastTests {
+         #expect(contrast(block.foregroundColor, .white) < 1.1)
+     }
+ 
++    @MainActor
++    @Test(arguments: [false, true])
++    func foregroundBrightnessPreservesMinimumContrast(customBlockGlyphs: Bool) throws {
++        let view = TerminalView(frame: .zero, options: TerminalOptions(cols: 12, rows: 4))
++        view.nativeBackgroundColor = .black
++        view.nativeForegroundColor = NSColor(srgbRed: 0.45, green: 0.45, blue: 0.45, alpha: 1)
++        view.minimumContrastRatio = 4.5
++        view.foregroundBrightness = 0.5
++        view.customBlockGlyphs = customBlockGlyphs
++        view.feed(text: "text")
++
++        let row = try renderFirstRow(view)
++        #expect(contrast(attributes(at: 0, in: row)[.foregroundColor], .black) >= 4.5)
++    }
++
+     @MainActor
+     @Test(arguments: [false, true])
+     func fontRenderedShapesKeepTheirOriginalColors(dim: Bool) throws {

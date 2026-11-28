@@ -1,158 +1,5 @@
-diff --git a/Sources/SwiftTerm/Apple/AppleTerminalView.swift b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-index e055644..2a4f2d7 100644
---- a/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-+++ b/Sources/SwiftTerm/Apple/AppleTerminalView.swift
-@@ -756,6 +756,7 @@ struct SnapshotRenderContext {
-     let bidiHostPolicy: BidiHostPolicy
-     let glyphFallbackProvider: (any TerminalGlyphFallbackProvider)?
-     let cols: Int
-+    let rows: Int
- 
-     /// Identifies the values used to build attributed-string dictionaries.
-     /// Equal visual inputs produce the same identity across frames, so the
-@@ -766,13 +767,13 @@ struct SnapshotRenderContext {
-     init (viewState: FrameViewState, snapshot: TerminalSnapshot) {
-         self.init(viewState: viewState, style: snapshot.style,
-                   nativeColors: snapshot.nativeColors(for: viewState.appearance),
--                  cols: snapshot.cols,
-+                  cols: snapshot.cols, rows: snapshot.rowCount,
-                   searchMatchRows: snapshot.searchMatchRows,
-                   searchMatchFirstRow: snapshot.firstRow)
-     }
- 
-     init (viewState: FrameViewState, style: SnapshotStyle, ansiColors: [Color],
--          cols: Int) {
-+          cols: Int, rows: Int) {
-         let appearance = viewState.appearance
-         self.init(
-             viewState: viewState,
-@@ -789,11 +790,11 @@ struct SnapshotRenderContext {
-                 ansiColors: ansiColors.map(TTColor.make(color:)),
-                 searchMatchBackgroundColor: appearance.searchMatchBackgroundColor?.nativeColor,
-                 searchMatchForegroundColor: appearance.searchMatchForegroundColor?.nativeColor),
--            cols: cols)
-+            cols: cols, rows: rows)
-     }
- 
-     private init (viewState: FrameViewState, style: SnapshotStyle,
--                  nativeColors: SnapshotNativeColors, cols: Int,
-+                  nativeColors: SnapshotNativeColors, cols: Int, rows: Int,
-                   searchMatchRows: [[Range<Int>]] = [], searchMatchFirstRow: Int = 0) {
-         fonts = viewState.fonts
-         cellDimension = viewState.cellDimension
-@@ -846,6 +847,7 @@ struct SnapshotRenderContext {
-         bidiHostPolicy = viewState.bidiHostPolicy
-         glyphFallbackProvider = viewState.glyphFallbackProvider
-         self.cols = cols
-+        self.rows = rows
- 
-         var identityHasher = Hasher()
-         identityHasher.combine(fonts.normal.hash)
-@@ -3008,7 +3010,8 @@ extension TerminalView {
-             textBlinkVisible: textBlinkVisible)
-         let context = SnapshotRenderContext(viewState: FrameViewState(view: self),
-                                             style: liveStyle,
--                                            ansiColors: terminal.ansiColors, cols: cols)
-+                                            ansiColors: terminal.ansiColors, cols: cols,
-+                                            rows: terminal.rows)
-         var result = textBuilder.buildAttributedString(row: snapshotRow, absoluteRow: row,
-                                                        context: context)
-         result.images = line.images
-diff --git a/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift b/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift
-index 60830dc..746d2cd 100644
---- a/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift
-+++ b/Sources/SwiftTerm/Apple/SnapshotTextBuilder.swift
-@@ -140,22 +140,32 @@ final class SnapshotTextBuilder {
-     /// belongs to one renderer, so this cache cannot race another renderer.
-     private var fallbackFonts: [FallbackFontKey: TTFont] = [:]
- 
--    init(trueColorCacheCapacity: Int = 4_096) {
-+    init(trueColorCacheCapacity: Int = 4_096, attributeCacheCapacity: Int = 4_096) {
-         precondition(trueColorCacheCapacity > 0)
-+        precondition(attributeCacheCapacity > 0)
-         self.trueColorCacheCapacity = trueColorCacheCapacity
-+        self.minimumAttributeCacheCapacity = attributeCacheCapacity
-+        self.attributeCacheCapacity = attributeCacheCapacity
-         trueColorCache.reserveCapacity(min(trueColorCacheCapacity, 1_024))
-     }
- 
-     var trueColorCacheCount: Int { trueColorCache.count }
- 
-+    private let minimumAttributeCacheCapacity: Int
-+    private var attributeCacheCapacity: Int
-+
-     /// Attribute dictionaries for the current render context.
-     ///
-     /// Rebuilding these was the largest single main-thread cost in a Time
-     /// Profiler trace: `[NSAttributedString.Key: Any]` has String-backed keys,
-     /// so each rebuild hashes and compares NSStrings and bridges every value
-     /// through ObjC.
-+    /// Both attribute caches are bounded independently. Truecolor output can
-+    /// introduce new styles indefinitely without changing the render context,
-+    /// even after the corresponding cells have left the terminal buffer.
-     private(set) var attributeCache: [AttributeCacheKey: SnapshotTextAttributes] = [:]
-     private var packedAttributeCache: [PackedAttributeCacheKey: SnapshotTextAttributes] = [:]
-+    var packedAttributeCacheCount: Int { packedAttributeCache.count }
-     /// The style table that the keys of `packedAttributeCache` come from. A
-     /// style ID means a different style in another table: an external source
-     /// (`TerminalRowStore`) can replace its table when it is nearly full.
-@@ -231,6 +241,9 @@ final class SnapshotTextBuilder {
-         }
-         let built = buildAttributes(attribute, withUrl: withUrl, context: context)
-         if let built {
-+            if attributeCache.count >= attributeCacheCapacity {
-+                attributeCache.removeAll(keepingCapacity: true)
-+            }
-             attributeCache[key] = built
-         }
-         return built
-@@ -243,23 +256,32 @@ final class SnapshotTextBuilder {
-                                context: SnapshotRenderContext)
-         -> SnapshotTextAttributes?
-     {
--        prepareAttributeCache(for: context)
-+        // `buildAttributedString` prepared the cache for this context at the
-+        // start of the row; the context cannot change within one row.
-         let cacheKey = PackedAttributeCacheKey(attribute: key, withUrl: withUrl)
-         if let cached = packedAttributeCache[cacheKey] {
-             return cached
-         }
-         let built = buildAttributes(attribute, withUrl: withUrl, context: context)
-         if let built {
-+            if packedAttributeCache.count >= attributeCacheCapacity {
-+                packedAttributeCache.removeAll(keepingCapacity: true)
-+            }
-             packedAttributeCache[cacheKey] = built
-         }
-         return built
-     }
- 
-     private func prepareAttributeCache(for context: SnapshotRenderContext) {
--        guard attributeCacheContextID != context.identity else { return }
-+        // The visible grid bounds the styles that one redraw needs, so a full
-+        // grid stays warm across redraws. A new limit alone does not clear
-+        // the caches: after a shrink, the next insert past the limit does.
-+        attributeCacheCapacity = max(minimumAttributeCacheCapacity,
-+                                     2 * context.cols * context.rows)
-         // The identity changes only when an input used by the attribute
-         // dictionaries changes. A new frame with the same visual inputs keeps
-         // the cache warm.
-+        guard attributeCacheContextID != context.identity else { return }
-         attributeCache.removeAll(keepingCapacity: true)
-         packedAttributeCache.removeAll(keepingCapacity: true)
-         glyphCoverageCache.removeAll(keepingCapacity: true)
-@@ -460,6 +482,9 @@ final class SnapshotTextBuilder {
-     {
-         var segments: [ViewLineSegment] = []
-         let line = snapshotRow.line
-+        // Once per row, not once per style run: the packed lookup and the
-+        // glyph-fallback caches depend on this reset.
-+        prepareAttributeCache(for: context)
-         if line.cellArena !== packedAttributeCacheArena {
-             packedAttributeCache.removeAll(keepingCapacity: true)
-             packedAttributeCacheArena = line.cellArena
 diff --git a/Sources/SwiftTerm/Buffer.swift b/Sources/SwiftTerm/Buffer.swift
-index 243dd9b..29ef08f 100644
+index 055c36a..5d00d80 100644
 --- a/Sources/SwiftTerm/Buffer.swift
 +++ b/Sources/SwiftTerm/Buffer.swift
 @@ -45,7 +45,21 @@ final class BufferRef {
@@ -226,7 +73,7 @@ index a767408..e3aa818 100644
      ///
      /// `Buffer.clear` uses this instead of replacing its list object. That
 diff --git a/Sources/SwiftTerm/Terminal.swift b/Sources/SwiftTerm/Terminal.swift
-index f155696..906998a 100644
+index 8efe181..fcab3af 100644
 --- a/Sources/SwiftTerm/Terminal.swift
 +++ b/Sources/SwiftTerm/Terminal.swift
 @@ -594,7 +594,10 @@ open class Terminal {
@@ -235,9 +82,9 @@ index f155696..906998a 100644
      // The current buffers
 -    private let cellArena: CellArena
 +    private var cellArena: CellArena
-+    // If the live buffers themselves fill the table, retain the bounded
-+    // fallback without rescanning them for every SGR in the same input batch.
-+    private var styleReclamationBlocked = false
++    // When the live buffers still pin the table, avoid rescanning them on
++    // every input batch. Explicit history removal can lift the delay early.
++    private(set) var styleReclamationRetryBytes = 0
      var normalBuffer, altBuffer: Buffer
      /**
       * Returns the active buffer (either the normal buffer or the alternative buffer)
@@ -248,7 +95,7 @@ index f155696..906998a 100644
 -        let styleID = cellArena.intern(attribute: attribute)
 +        var arenaChanged = false
 +        var styleID = cellArena.intern(attribute: attribute)
-+        if styleID == nil && !styleReclamationBlocked {
++        if styleID == nil && styleReclamationRetryBytes == 0 {
 +            arenaChanged = reclaimStyles(for: attribute)
 +            styleID = cellArena.intern(attribute: attribute)
 +        }
@@ -259,7 +106,7 @@ index f155696..906998a 100644
          curAttr = effectiveAttribute
          curStyleID = effectiveStyleID
  
-@@ -927,6 +935,33 @@ open class Terminal {
+@@ -927,6 +935,37 @@ open class Terminal {
          currentEraseBlankCell = eraseBlank
          currentEraseSpaceCell = eraseSpace
      }
@@ -271,10 +118,14 @@ index f155696..906998a 100644
 +        var referenced: Set<UInt16> = [0]
 +        normalBuffer.collectStyleIdentifiers(into: &referenced)
 +        altBuffer.collectStyleIdentifiers(into: &referenced)
-+        // Reserve the requested style and its erase background. If all the
-+        // styles are still live, the existing resource limit continues to apply.
-+        guard referenced.count + 2 <= cellArena.attributeLimit + 1 else {
-+            styleReclamationBlocked = true
++        // Leave enough space between remaps to amortize copying both buffers.
++        // The default style occupies a permanent slot.
++        let capacity = cellArena.attributeLimit
++        let liveStyles = referenced.count - 1
++        guard liveStyles <= capacity * 3 / 4, liveStyles + 2 <= capacity else {
++            let normalCells = saturatingProduct(normalBuffer.lines.count, normalBuffer.cols)
++            let alternateCells = saturatingProduct(altBuffer.lines.count, altBuffer.cols)
++            styleReclamationRetryBytes = min(1_048_576, max(65_536, normalCells, alternateCells))
 +            return false
 +        }
 +
@@ -293,209 +144,60 @@ index f155696..906998a 100644
      // The requested conformance from DECSCL command
      enum TerminalConformance: Sendable {
          case vt100
-@@ -1417,6 +1452,7 @@ open class Terminal {
+@@ -1423,6 +1462,7 @@ open class Terminal {
      }
      public func setup (isReset: Bool = false)
      {
-+        styleReclamationBlocked = false
++        styleReclamationRetryBytes = 0
          // Sadly a duplicate of much of what lives in init() due to Swift not allowing me to
          // call this
          _cols = max (options.cols, MINIMUM_COLS)
-@@ -8084,6 +8120,7 @@ open class Terminal {
+@@ -4914,6 +4954,7 @@ open class Terminal {
+             // Clear scrollback (everything not in viewport)
+             let scrollBackSize = buffer.lines.count - rows
+             if scrollBackSize > 0 {
++                styleReclamationRetryBytes = 0
+                 buffer.lines.trimStart (count: scrollBackSize)
+                 buffer.linesTop = 0
+                 buffer.yBase = max (buffer.yBase - scrollBackSize, 0)
+@@ -8094,6 +8135,9 @@ open class Terminal {
       */
      public func parse (buffer: ArraySlice<UInt8>)
      {
-+        if parseDepth == 0 { styleReclamationBlocked = false }
++        if parseDepth == 0, styleReclamationRetryBytes > 0 {
++            styleReclamationRetryBytes = max(0, styleReclamationRetryBytes - buffer.count)
++        }
          parseDepth += 1
          defer {
              parseDepth -= 1
-@@ -8113,6 +8150,7 @@ open class Terminal {
+@@ -8123,6 +8167,9 @@ open class Terminal {
      /// Parses one borrowed batch and completes all parser effects before return.
      private func parseBorrowed(_ bytes: Span<UInt8>)
      {
-+        if parseDepth == 0 { styleReclamationBlocked = false }
++        if parseDepth == 0, styleReclamationRetryBytes > 0 {
++            styleReclamationRetryBytes = max(0, styleReclamationRetryBytes - bytes.count)
++        }
          parseDepth += 1
          defer {
              parseDepth -= 1
-diff --git a/Tests/SwiftTermTests/AttributeCacheTests.swift b/Tests/SwiftTermTests/AttributeCacheTests.swift
-index 744674a..a3b0743 100644
---- a/Tests/SwiftTermTests/AttributeCacheTests.swift
-+++ b/Tests/SwiftTermTests/AttributeCacheTests.swift
-@@ -25,9 +25,10 @@ struct AttributeCacheTests {
-         SnapshotTextBuilder()
+@@ -9134,6 +9181,7 @@ open class Terminal {
+     public func clearScrollback ()
+     {
+         // Only the normal buffer has scrollback
++        if normalBuffer.yBase > 0 { styleReclamationRetryBytes = 0 }
+         normalBuffer.clearScrollback ()
+         refresh (startRow: 0, endRow: self.rows - 1)
      }
+@@ -9141,7 +9189,9 @@ open class Terminal {
+     public func changeScrollback (_ newScrollback: Int?)
+     {
+         // Only the normal buffer has scrollback, the alt buffer should never have scrollback.
++        let previousLineCount = normalBuffer.lines.count
+         normalBuffer.changeHistorySize(newScrollback)
++        if normalBuffer.lines.count < previousLineCount { styleReclamationRetryBytes = 0 }
  
--    private func makeContext(_ view: TerminalView) -> SnapshotRenderContext {
-+    private func makeContext(_ view: TerminalView, cols: Int = 80,
-+                             rows: Int = 1) -> SnapshotRenderContext {
-         SnapshotRenderContext(viewState: FrameViewState(view: view), style: .empty,
--                              ansiColors: view.withTerminal { $0.ansiColors }, cols: 80)
-+                              ansiColors: view.withTerminal { $0.ansiColors }, cols: cols, rows: rows)
-     }
- 
-     /// Repeated lookups within one context must return equal dictionaries, and
-@@ -97,6 +98,161 @@ struct AttributeCacheTests {
-         #expect(builder.attributeCache.count == 2)
-     }
- 
-+    /// Styles disappear from the screen while the render context stays the
-+    /// same. Their dictionaries must eventually leave the cache as well.
-+    @Test(arguments: [false, true])
-+    func attributeCacheReleasesOldStyles(withUrl: Bool) {
-+        let builder = SnapshotTextBuilder(attributeCacheCapacity: 8)
-+        let context = makeContext(makeView(), cols: 1)
-+        weak var firstDictionary: NSDictionary?
-+
-+        for value in 0..<12 {
-+            autoreleasepool {
-+                let attribute = Attribute(
-+                    fg: .trueColor(red: UInt8(value >> 8),
-+                                   green: UInt8(value & 0xff), blue: 37),
-+                    bg: .defaultColor, style: .none)
-+                let attributes = builder.getAttributes(attribute, withUrl: withUrl,
-+                                                       context: context)
-+                if value == 0 {
-+                    firstDictionary = attributes?.objectiveC
-+                    #expect(firstDictionary != nil)
-+                }
-+            }
-+        }
-+
-+        #expect(builder.attributeCache.count <= 8)
-+        #expect(firstDictionary == nil)
-+    }
-+
-+    /// Blank truecolor backgrounds use inline packed keys, so their variety
-+    /// is not limited by the arena's interned style table. Repaint one cell
-+    /// repeatedly to exercise the actual packed rendering path.
-+    @Test func packedAttributeCacheStaysBoundedAcrossBackgroundChanges() {
-+        let builder = SnapshotTextBuilder(attributeCacheCapacity: 8)
-+        let context = makeContext(makeView(), cols: 1)
-+        let line = BufferLine(cols: 1)
-+        let row = TerminalSnapshot.Row(source: line, borrowing: true)
-+        var maximumCachedAttributes = 0
-+
-+        for value in 0..<12 {
-+            autoreleasepool {
-+                let background = Attribute.Color.trueColor(
-+                    red: UInt8(value >> 8), green: UInt8(value & 0xff), blue: 37)
-+                line.fill(with: CharData(
-+                    attribute: Attribute(fg: .defaultColor, bg: background, style: .none),
-+                    code: 0))
-+                let rendered = builder.buildAttributedString(row: row, absoluteRow: 0,
-+                                                              context: context)
-+                let color = rendered.segments.first?.attributedString.attribute(
-+                    .backgroundColor, at: 0, effectiveRange: nil) as? NSColor
-+                #expect(color == NSColor.make(red: CGFloat(value >> 8) / 255,
-+                                               green: CGFloat(value & 0xff) / 255,
-+                                               blue: 37.0 / 255, alpha: 1))
-+                maximumCachedAttributes = max(maximumCachedAttributes,
-+                                              builder.packedAttributeCacheCount)
-+            }
-+        }
-+
-+        #expect(maximumCachedAttributes > 0)
-+        #expect(maximumCachedAttributes <= 8)
-+    }
-+
-+    @Test(arguments: [false, true])
-+    func largeGridKeepsAttributeCacheWarm(withUrl: Bool) throws {
-+        let view = makeView()
-+        let builder = makeBuilder()
-+        let context = makeContext(view, cols: 100, rows: 42)
-+        let attributes = (0..<4_200).map { value in
-+            Attribute(fg: .trueColor(red: UInt8(value >> 8),
-+                                     green: UInt8(value & 0xff), blue: 37),
-+                      bg: .defaultColor, style: .none)
-+        }
-+        let firstPass = try attributes.map {
-+            try #require(builder.getAttributes($0, withUrl: withUrl, context: context))
-+        }
-+        let nextFrame = makeContext(view, cols: 100, rows: 42)
-+        #expect(nextFrame.identity == context.identity)
-+        for (attribute, first) in zip(attributes, firstPass) {
-+            let second = try #require(builder.getAttributes(
-+                attribute, withUrl: withUrl, context: nextFrame))
-+            #expect(first.objectiveC === second.objectiveC)
-+        }
-+        #expect(builder.attributeCache.count == attributes.count)
-+    }
-+
-+    @Test func largeGridKeepsPackedAttributeCacheWarm() throws {
-+        let view = makeView()
-+        let builder = SnapshotTextBuilder(trueColorCacheCapacity: 1)
-+        let arena = CellArena()
-+        let rows = (0..<42).map { row in
-+            let line = BufferLine(cols: 100, arena: arena)
-+            for col in 0..<100 {
-+                let value = row * 100 + col
-+                line[col] = CharData(attribute: Attribute(
-+                    fg: .defaultColor,
-+                    bg: .trueColor(red: UInt8(value >> 8),
-+                                   green: UInt8(value & 0xff), blue: 37), style: .none), code: 0)
-+            }
-+            return TerminalSnapshot.Row(source: line, borrowing: true)
-+        }
-+        var firstPass: [NSColor] = []
-+        for pass in 0..<2 {
-+            let context = makeContext(view, cols: 100, rows: rows.count)
-+            for (index, row) in rows.enumerated() {
-+                let rendered = builder.buildAttributedString(row: row, absoluteRow: index,
-+                                                              context: context)
-+                let text = try #require(rendered.segments.first?.attributedString)
-+                for col in 0..<100 {
-+                    let color = try #require(text.attribute(
-+                        .backgroundColor, at: col, effectiveRange: nil) as? NSColor)
-+                    if pass == 0 {
-+                        firstPass.append(color)
-+                    } else {
-+                        // The one-entry color cache cannot hide an attribute-cache miss.
-+                        #expect(color === firstPass[index * 100 + col])
-+                    }
-+                }
-+            }
-+            #expect(builder.packedAttributeCacheCount == 4_200)
-+        }
-+    }
-+
-+    /// A resize changes the limit but does not clear the cache, so a live
-+    /// window drag stays warm. After a shrink, the next new style clears it.
-+    @Test func gridResizeUpdatesAttributeCacheCapacity() throws {
-+        let view = makeView()
-+        let builder = SnapshotTextBuilder(attributeCacheCapacity: 2)
-+        func lookUp(_ value: Int, rows: Int) throws -> NSDictionary {
-+            try #require(builder.getAttributes(
-+                Attribute(fg: .ansi256(code: UInt8(value)), bg: .defaultColor, style: .none),
-+                withUrl: false, context: makeContext(view, cols: 1, rows: rows))).objectiveC
-+        }
-+
-+        // One row: the limit is the minimum, 2.
-+        for value in 0..<4 {
-+            _ = try lookUp(value, rows: 1)
-+        }
-+        #expect(builder.attributeCache.count == 2)
-+
-+        // Two rows: the limit grows to 4 and the two cached entries stay.
-+        var grown: [NSDictionary] = []
-+        for value in 0..<4 {
-+            grown.append(try lookUp(value, rows: 2))
-+        }
-+        #expect(builder.attributeCache.count == 4)
-+
-+        // Back to one row: existing entries still hit.
-+        for value in 0..<4 {
-+            #expect(try lookUp(value, rows: 1) === grown[value])
-+        }
-+        #expect(builder.attributeCache.count == 4)
-+
-+        // The next new style finds the cache over the limit and clears it.
-+        _ = try lookUp(4, rows: 1)
-+        #expect(builder.attributeCache.count == 1)
-+    }
-+
-     /// A visual-input change invalidates the cache. Without this a palette or
-     /// font change would keep rendering with the old colors.
-     @Test func changedVisualInputsInvalidateTheCache() {
+         // Update the options to reflect the new scrollback size.
+         options.scrollback = newScrollback ?? 0
 diff --git a/Tests/SwiftTermTests/CellStorageTests.swift b/Tests/SwiftTermTests/CellStorageTests.swift
 index 86cc438..9af0c4d 100644
 --- a/Tests/SwiftTermTests/CellStorageTests.swift
@@ -518,52 +220,12 @@ index 86cc438..9af0c4d 100644
 +        #expect(terminal.getCharData(col: 1, row: 1)?.attribute == terminal.currentAttribute)
      }
  }
-diff --git a/Tests/SwiftTermTests/GlyphFallbackTests.swift b/Tests/SwiftTermTests/GlyphFallbackTests.swift
-index 36386ad..e4b3999 100644
---- a/Tests/SwiftTermTests/GlyphFallbackTests.swift
-+++ b/Tests/SwiftTermTests/GlyphFallbackTests.swift
-@@ -281,19 +281,19 @@ struct GlyphFallbackTests {
-         let bareContext = SnapshotRenderContext(viewState: FrameViewState(view: view),
-                                                 style: .empty,
-                                                 ansiColors: view.withTerminal { $0.ansiColors },
--                                                cols: 80)
-+                                                cols: 80, rows: 25)
-         view.glyphFallbackProvider = provider
-         let withProvider = SnapshotRenderContext(viewState: FrameViewState(view: view),
-                                                  style: .empty,
-                                                  ansiColors: view.withTerminal { $0.ansiColors },
--                                                 cols: 80)
-+                                                 cols: 80, rows: 25)
-         #expect(bareContext.identity != withProvider.identity)
- 
-         provider.generation += 1
-         let bumped = SnapshotRenderContext(viewState: FrameViewState(view: view),
-                                            style: .empty,
-                                            ansiColors: view.withTerminal { $0.ansiColors },
--                                           cols: 80)
-+                                           cols: 80, rows: 25)
-         #expect(withProvider.identity != bumped.identity)
-     }
- 
-diff --git a/Tests/SwiftTermTests/SearchHighlightTests.swift b/Tests/SwiftTermTests/SearchHighlightTests.swift
-index a77cc7b..700fed7 100644
---- a/Tests/SwiftTermTests/SearchHighlightTests.swift
-+++ b/Tests/SwiftTermTests/SearchHighlightTests.swift
-@@ -409,7 +409,7 @@ struct SearchHighlightTests {
-         view.translucentCellBackgrounds = true
-         view.searchMatchBackgroundColor = NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.5)
-         let context = SnapshotRenderContext(viewState: FrameViewState(view: view), style: .empty,
--                                            ansiColors: view.withTerminal { $0.ansiColors }, cols: 40)
-+                                            ansiColors: view.withTerminal { $0.ansiColors }, cols: 40, rows: 25)
-         // As the selection fill: 0.5 white over 0.4 black.
-         let fill = context.searchMatchFillColor!.usingColorSpace(.sRGB)!
-         #expect(abs(fill.alphaComponent - 0.7) < 0.001)
 diff --git a/Tests/SwiftTermTests/StyleArenaReclamationTests.swift b/Tests/SwiftTermTests/StyleArenaReclamationTests.swift
 new file mode 100644
-index 0000000..1ddd9fd
+index 0000000..ae61698
 --- /dev/null
 +++ b/Tests/SwiftTermTests/StyleArenaReclamationTests.swift
-@@ -0,0 +1,96 @@
+@@ -0,0 +1,115 @@
 +import Testing
 +@testable import SwiftTerm
 +
@@ -641,8 +303,27 @@ index 0000000..1ddd9fd
 +        }
 +        terminal.feed(text: text)
 +        #expect(terminal.buffer.cellArena.attributeCount <= Int(UInt16.max))
++        let retryBytes = terminal.styleReclamationRetryBytes
++        #expect(retryBytes > 0)
++        let nextBatch = "\(esc)[38;2;231;42;122mX"
++        terminal.feed(text: nextBatch)
++        #expect(terminal.styleReclamationRetryBytes == retryBytes - nextBatch.utf8.count)
++
 +        terminal.feed(text: "\(esc)[3J\(esc)[2J\(esc)[H\(esc)[38;2;231;42;123mR")
 +        #expect(terminal.getCharData(col: 0, row: 0)?.attribute.fg == .trueColor(red: 231, green: 42, blue: 123))
++    }
++
++    @Test func nearFullLiveTableDoesNotRemapForAFewFreeStyles() {
++        let (terminal, _) = TerminalTestHarness.makeTerminal(cols: 80, rows: 2, scrollback: 1_000)
++        var text = ""
++        for color in 0..<65_500 {
++            text += "\(esc)[38;2;0;\(color >> 8);\(color & 255)mX"
++        }
++        terminal.feed(text: text)
++        let arena = terminal.buffer.cellArena
++        terminal.feed(text: "\(esc)[?1049h" + animation(100))
++        #expect(terminal.buffer.cellArena === arena)
++        #expect(terminal.styleReclamationRetryBytes > 0)
 +    }
 +
 +    @Test func arenaAdoptionDoesNotReuseTrimmedRows() {
@@ -699,16 +380,3 @@ index 478632a..fbb0144 100644
      @Test func frameBoundaryMessagesAreCheckedSendable() {
          requireSendable(FrameViewState.self)
          requireSendable(MainFrameEffects.self)
-diff --git a/Tests/SwiftTermTests/TranslucentCellBackgroundTests.swift b/Tests/SwiftTermTests/TranslucentCellBackgroundTests.swift
-index f2c9af9..196a2d9 100644
---- a/Tests/SwiftTermTests/TranslucentCellBackgroundTests.swift
-+++ b/Tests/SwiftTermTests/TranslucentCellBackgroundTests.swift
-@@ -33,7 +33,7 @@ struct TranslucentCellBackgroundTests {
- 
-     private func makeContext(_ view: TerminalView) -> SnapshotRenderContext {
-         SnapshotRenderContext(viewState: FrameViewState(view: view), style: .empty,
--                              ansiColors: view.withTerminal { $0.ansiColors }, cols: 80)
-+                              ansiColors: view.withTerminal { $0.ansiColors }, cols: 80, rows: 25)
-     }
- 
-     private func colors(_ attribute: Attribute, view: TerminalView)

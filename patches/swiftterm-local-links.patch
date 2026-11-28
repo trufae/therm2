@@ -1,20 +1,24 @@
+diff --git a/Sources/SwiftTerm/Mac/MacTerminalView.swift b/Sources/SwiftTerm/Mac/MacTerminalView.swift
+index c33e715..d9ca7d4 100644
 --- a/Sources/SwiftTerm/Mac/MacTerminalView.swift
 +++ b/Sources/SwiftTerm/Mac/MacTerminalView.swift
-@@ -1750,6 +1750,11 @@
-     /// Controls how link tracking resolves hovered links:
+@@ -1893,6 +1893,11 @@ open class TerminalView: NSView, NSUserInterfaceValidations, TerminalDelegate {
      /// `.explicit` = OSC 8 only, `.implicit` = explicit + implicit fallback, `.none` = off.
      public var linkReporting: LinkReporting = .implicit
-+
+ 
 +    /// Resolves scheme-less explicit and detected links using the host's session context.
 +    /// Returned file URLs still pass through the normal untrusted-link checks.
 +    /// A nil result leaves the target unresolved, without using the app's working directory.
 +    public var localLinkResolver: ((String) -> URL?)?
-
++
      /// Controls link highlighting and link activation behavior.
      public var linkHighlightMode: LinkHighlightMode = .hoverWithModifier {
+         didSet {
+diff --git a/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift b/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
+index 30d7355..86c7344 100644
 --- a/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
 +++ b/Sources/SwiftTerm/Mac/TerminalLinkOpening.swift
-@@ -172,7 +172,15 @@
+@@ -172,7 +172,15 @@ extension TerminalView {
          if !resolvesLinksAgainstShellDirectory, pathBase != .remote {
              pathBase = .processDirectory
          }

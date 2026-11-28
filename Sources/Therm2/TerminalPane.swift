@@ -62,8 +62,8 @@ final class TerminalPane: LocalProcessTerminalView {
         suspendsRenderingWhenNotVisible = true
         setAccessibilityLabel("Terminal")
         registerForDraggedTypes(TerminalDrop.pasteboardTypes)
-        // Resolve against the PTY directory when opening the link. Hovering
-        // only shows the target and avoids querying the shell process.
+        // Resolve links against the PTY directory. The text preview shows
+        // the original link; SwiftTerm caches the cursor verdict while hovering.
         usesDefaultLinkPolicyForPreview = false
         localLinkResolver = { [weak self] link, _ in
             guard let self else { return nil }
