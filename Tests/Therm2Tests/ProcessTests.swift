@@ -34,7 +34,8 @@ struct ProcessTests {
             read -r line
             """, "sh", "two words", "", "$HOME; * | >", "-e"], directory: root.path, path: "/bin"))
         let controller = TerminalWindowController()
-        defer { controller.window?.close() }
+        let window = try #require(controller.window)
+        defer { window.close() }
         controller.newTab(command: command)
         let pane = try #require(controller.selectedTab?.activePane)
         try await waitFor("READY", in: pane)
@@ -63,6 +64,11 @@ struct ProcessTests {
         newPane.send(txt: "printf 'SHELL_%s\\n' 'TAB'\n")
         try await waitFor("SHELL_TAB", in: newPane)
 
+        let searchField = NSSearchField(frame: NSRect(x: 0, y: 0, width: 100, height: 24))
+        newPane.addSubview(searchField)
+        try #require(window.makeFirstResponder(searchField))
+        let searchEditor = try #require(searchField.currentEditor())
+
         pane.send(txt: "done\n")
         let deadline = ContinuousClock.now + .seconds(5)
         while controller.tabs.contains(where: { $0 === firstTab }), ContinuousClock.now < deadline {
@@ -70,6 +76,7 @@ struct ProcessTests {
         }
         #expect(controller.tabs.count == 1)
         #expect(controller.selectedTab?.activePane === newPane)
+        #expect(window.firstResponder === searchEditor)
         #expect(!pane.process.running)
     }
 

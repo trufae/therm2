@@ -151,17 +151,17 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
 
     func closeTab(_ tab: TerminalTab) {
         guard let index = tabs.firstIndex(where: { $0 === tab }) else { return }
-        let previous = selectedTab
         tab.stop()
         tab.root.removeFromSuperview()
         tabs.remove(at: index)
         if tabs.isEmpty { window?.close(); return }
-        if previous === tab {
+        if index == selectedIndex {
             selectedIndex = min(index, tabs.count - 1)
-        } else if let previous, let remaining = tabs.firstIndex(where: { $0 === previous }) {
-            selectedIndex = remaining
+            layoutChanged(in: tabs[selectedIndex])
+        } else {
+            if index < selectedIndex { selectedIndex -= 1 }
+            refreshChrome()
         }
-        layoutChanged(in: tabs[selectedIndex])
     }
 
     func split(vertical: Bool) {
