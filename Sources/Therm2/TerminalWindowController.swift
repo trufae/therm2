@@ -136,9 +136,12 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         guard index >= 0, let source = selectedTab else { return }
         let existing = tabs.indices.contains(index) ? tabs[index] : nil
         guard existing !== source else { return }
+        if let existing, existing.root.frame.width != content.bounds.width {
+            // A hidden tab can still have its width from before a window resize.
+            existing.root.frame.size.width = content.bounds.width
+        }
         let removesSource = source.panes.count == 1
-        source.displayedView.removeFromSuperview()
-        let destination = source.moveActivePane(to: existing)
+        guard let destination = source.moveActivePane(to: existing) else { NSSound.beep(); return }
         if existing == nil {
             destination.controller = self
             tabs.append(destination)

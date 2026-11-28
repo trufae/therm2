@@ -454,6 +454,45 @@ struct LayoutTests {
         #expect(controller.tabs.count == 1)
     }
 
+    @Test(arguments: [false, true], [false, true])
+    func movingToNarrowTabKeepsSourceSessionAndLayout(maximizedDestination: Bool, resizeWhileHidden: Bool) throws {
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab()
+        let destination = try #require(controller.selectedTab)
+        let narrowPane = destination.activePane
+        let otherPane = try #require(destination.split(vertical: true))
+        destination.cyclePane(by: 1)
+        let split = try #require(destination.root as? SplitView)
+        let initialWidth: CGFloat = resizeWhileHidden ? 3 : 1
+        split.setPosition(initialWidth, ofDividerAt: 0)
+        try #require(narrowPane.layoutView.frame.width == initialWidth)
+        if maximizedDestination { destination.togglePaneMaximized() }
+        let destinationView = destination.displayedView
+
+        controller.newTab()
+        let source = try #require(controller.selectedTab)
+        let moved = source.activePane
+        let pid = moved.process.shellPid
+        if resizeWhileHidden {
+            window.setContentSize(NSSize(width: 320, height: 600))
+        }
+
+        controller.moveActivePane(toTabAt: 0)
+
+        #expect(controller.tabs.count == 2)
+        #expect(controller.selectedTab === source)
+        #expect(window.firstResponder === moved)
+        #expect(source.displayedView.window === window)
+        #expect(moved.tab === source)
+        #expect(moved.process.running)
+        #expect(moved.process.shellPid == pid)
+        #expect(destination.panes.elementsEqual([narrowPane, otherPane], by: { $0 === $1 }))
+        #expect(destination.displayedView === destinationView)
+        #expect(destination.isPaneMaximized == maximizedDestination)
+    }
+
     @Test(arguments: [1, 8], [false, true])
     func movingToMissingTabCreatesOneTabAndKeepsSession(destinationIndex: Int, splitSource: Bool) throws {
         let controller = TerminalWindowController()
@@ -508,7 +547,7 @@ struct LayoutTests {
         moved.feed(text: "preserved output\r\n")
         let buffer = moved.getBufferAsData()
 
-        let destination = source.moveActivePane(to: nil)
+        let destination = try #require(source.moveActivePane(to: nil))
 
         #expect(destination.activePane === moved)
         #expect(moved.getBufferAsData() == buffer)

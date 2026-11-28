@@ -39,21 +39,19 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
 
     @discardableResult
     func split(vertical: Bool) -> TerminalPane? {
-        let wasMaximized = isPaneMaximized
-        setPaneMaximized(false)
-        let old = activePane
-        let oldView = old.layoutView
-        let minimum = SplitView.minimumSize(of: oldView)
-        let available = vertical ? oldView.bounds.width : oldView.bounds.height
-        guard available >= (vertical ? minimum.width : minimum.height) * 2 + 1 else {
-            setPaneMaximized(wasMaximized)
-            controller?.layoutChanged(in: self)
-            return nil
-        }
-        let pane = TerminalPane(directory: old.newSessionDirectory)
+        guard canSplitActivePane(vertical: vertical) else { return nil }
+        let pane = TerminalPane(directory: activePane.newSessionDirectory)
         insert(pane, vertical: vertical)
         controller?.layoutChanged(in: self)
         return pane
+    }
+
+    private func canSplitActivePane(vertical: Bool) -> Bool {
+        let view = maximizedPlaceholder ?? activePane.layoutView
+        let minimum = SplitView.minimumSize(of: view)
+        let available = vertical ? view.bounds.width : view.bounds.height
+        let paneMinimum = vertical ? minimum.width : minimum.height
+        return available >= paneMinimum * 2 + SplitView.dividerWidth
     }
 
     private func insert(_ pane: TerminalPane, vertical: Bool) {
@@ -74,9 +72,11 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     }
 
     /// Reparent the existing terminal and its PTY without stopping or restarting it.
-    func moveActivePane(to destination: TerminalTab?) -> TerminalTab {
+    func moveActivePane(to destination: TerminalTab?) -> TerminalTab? {
         guard destination !== self else { return self }
+        guard destination?.canSplitActivePane(vertical: true) ?? true else { return nil }
         let wasMaximized = isPaneMaximized
+        displayedView.removeFromSuperview()
         setPaneMaximized(false)
         let pane = activePane
         removePane(pane)
@@ -247,7 +247,8 @@ private final class PanePlaceholder: NSView {
 }
 
 final class SplitView: NSSplitView, NSSplitViewDelegate {
-    override var dividerThickness: CGFloat { 1 }
+    static let dividerWidth: CGFloat = 1
+    override var dividerThickness: CGFloat { Self.dividerWidth }
     override var dividerColor: NSColor { Preferences.shared.accentColor }
 
     override func drawDivider(in rect: NSRect) {
@@ -272,9 +273,9 @@ final class SplitView: NSSplitView, NSSplitViewDelegate {
         }
         let sizes = split.subviews.map { minimumSize(of: $0) }
         if split.isVertical {
-            return NSSize(width: sizes.reduce(1) { $0 + $1.width }, height: sizes.map(\.height).max() ?? 1)
+            return NSSize(width: sizes.reduce(dividerWidth) { $0 + $1.width }, height: sizes.map(\.height).max() ?? 1)
         }
-        return NSSize(width: sizes.map(\.width).max() ?? 1, height: sizes.reduce(1) { $0 + $1.height })
+        return NSSize(width: sizes.map(\.width).max() ?? 1, height: sizes.reduce(dividerWidth) { $0 + $1.height })
     }
 
     func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat,
