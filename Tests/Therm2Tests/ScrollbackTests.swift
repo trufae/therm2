@@ -88,6 +88,39 @@ struct ScrollbackTests {
         }
     }
 
+    @Test func resettingUnlimitedHistoryAppliesOnlyTheDefaultLimit() throws {
+        let domain = "Therm2Tests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let preferences = Preferences(defaults: defaults)
+        preferences.scrollbackLimit = 0
+        preferences.unlimitedScrollback = true
+
+        let pane = TerminalPane(directory: NSTemporaryDirectory())
+        pane.changeScrollback(preferences.scrollbackSize)
+        pane.feed(text: "OLD_HISTORY\r\n" + String(repeating: "line\r\n", count: 1_000)
+            + "RECENT_HISTORY\r\n" + String(repeating: "line\r\n", count: 200))
+        #expect(contents(pane).contains("OLD_HISTORY"))
+        #expect(contents(pane).contains("RECENT_HISTORY"))
+
+        var limits: [Int] = []
+        preferences.onChange = { [unowned preferences] change in
+            guard case .scrollback = change else { return }
+            limits.append(preferences.scrollbackSize)
+            pane.changeScrollback(preferences.scrollbackSize)
+        }
+        preferences.reset()
+        preferences.reset()
+
+        #expect(limits == [1_000])
+        #expect(Preferences(defaults: defaults).scrollbackSize == 1_000)
+        #expect(!contents(pane).contains("OLD_HISTORY"))
+        #expect(contents(pane).contains("RECENT_HISTORY"))
+        pane.withTerminal { terminal in
+            #expect(terminal.normalBuffer.yBase == 1_000)
+        }
+    }
+
     @Test func alternateScreenStaysBoundedAndFullResetKeepsUnlimitedMode() {
         let preferences = Preferences.shared
         let original = preferences.unlimitedScrollback
