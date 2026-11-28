@@ -1,6 +1,6 @@
 import AppKit
 
-final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate {
+final class PreferencesWindowController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate {
     private let preferences: Preferences
     private let background = NSColorWell()
     private let accent = NSColorWell()
@@ -28,6 +28,7 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 480, height: 540),
                             styleMask: [.titled, .closable], backing: .buffered, defer: false)
         super.init(window: panel)
+        panel.delegate = self
         panel.title = "Preferences"
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
@@ -204,6 +205,10 @@ final class PreferencesWindowController: NSWindowController, NSTextFieldDelegate
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(preferences:)") }
+
+    func windowWillClose(_ notification: Notification) {
+        if NSColorPanel.sharedColorPanelExists { NSColorPanel.shared.close() }
+    }
 
     func refresh() {
         background.color = preferences.backgroundColor

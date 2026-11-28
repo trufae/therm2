@@ -243,6 +243,35 @@ struct PreferencesTests {
         #expect(preview.frame.height == 100)
     }
 
+    @Test func closingPreferencesDismissesTheColorPicker() throws {
+        let controller = PreferencesWindowController()
+        let window = try #require(controller.window)
+        let stack = try #require(window.contentView?.subviews.first as? NSStackView)
+        let grid = try #require(stack.arrangedSubviews.first as? NSGridView)
+        let wells = (0..<grid.numberOfRows).compactMap {
+            grid.cell(atColumnIndex: 1, rowIndex: $0).contentView as? NSColorWell
+        }
+        try #require(wells.count == 2)
+
+        let picker = NSColorPanel.shared
+        defer {
+            window.close()
+            picker.close()
+        }
+        for well in wells {
+            window.orderFront(nil)
+            well.activate(true)
+            picker.orderFront(nil)
+            #expect(picker.isVisible)
+            #expect(well.isActive)
+
+            window.performClose(nil)
+            #expect(!window.isVisible)
+            #expect(!picker.isVisible)
+            #expect(!well.isActive)
+        }
+    }
+
     @Test func invalidStoredColorsAndDimmingFallBackSafely() throws {
         let domain = "Therm2Tests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: domain))
