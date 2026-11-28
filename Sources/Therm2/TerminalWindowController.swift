@@ -161,6 +161,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         } else {
             if index < selectedIndex { selectedIndex -= 1 }
             refreshChrome()
+            layoutContent()
         }
     }
 
@@ -210,12 +211,23 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         refreshChrome()
     }
 
-    func refreshChrome() {
-        let title = selectedTab?.activePane.title ?? ""
-        window?.title = Preferences.shared.emptyWindowTitle ? "" : (title.isEmpty ? "Therm2" : title)
+    func paneTitleChanged(_ pane: TerminalPane) {
+        guard let tab = pane.tab, let index = tabs.firstIndex(where: { $0 === tab }) else { return }
+        if selectedTab?.activePane === pane { updateWindowTitle() }
+        tabBar.updateTitle(tab.title, at: index)
+    }
+
+    func updateWindowTitle() {
+        guard let window else { return }
+        let paneTitle = selectedTab?.activePane.title ?? ""
+        let title = Preferences.shared.emptyWindowTitle ? "" : (paneTitle.isEmpty ? "Therm2" : paneTitle)
+        if window.title != title { window.title = title }
+    }
+
+    private func refreshChrome() {
+        updateWindowTitle()
         tabBar.isHidden = tabs.count < 2
         tabBar.update(titles: tabs.map(\.title), selected: selectedIndex)
-        layoutContent()
     }
 
     private func layoutContent() {
@@ -363,7 +375,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
             tabs.forEach { redraw($0.root) }
         case .notch: layoutContent()
         case .fullscreen: updateFullscreenBehavior()
-        case .title: refreshChrome()
+        case .title: updateWindowTitle()
         case .directory, .updates: break
         }
     }

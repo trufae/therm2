@@ -204,9 +204,12 @@ final class TerminalPane: LocalProcessTerminalView {
     }
 
     func updateTitle(_ title: String) {
-        let clean = String(title.unicodeScalars.filter { !CharacterSet.controlCharacters.contains($0) }.prefix(256))
+        let scalars = title.unicodeScalars.lazy.filter { !CharacterSet.controlCharacters.contains($0) }
+        var clean = ""
+        clean.unicodeScalars.append(contentsOf: scalars.prefix(256))
+        guard clean != self.title else { return }
         self.title = clean
-        tab?.controller?.refreshChrome()
+        tab?.controller?.paneTitleChanged(self)
     }
 
     func updateDirectory(_ directory: String?) {
@@ -221,9 +224,8 @@ final class TerminalPane: LocalProcessTerminalView {
     }
 
     func showLaunchError(_ error: LocalProcessError) {
-        title = "Launch failed"
+        updateTitle("Launch failed")
         feed(text: "\r\nCould not start \(command?.name ?? Self.shell): \(error)\r\nPress ⌘W to close this pane.\r\n")
-        tab?.controller?.refreshChrome()
     }
 }
 

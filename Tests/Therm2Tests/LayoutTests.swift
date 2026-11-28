@@ -773,6 +773,51 @@ struct LayoutTests {
         #expect(pane.title.isEmpty)
     }
 
+    @Test func terminalTitleUpdatesLeaveWindowAndTabBarLayoutAlone() throws {
+        let preferences = Preferences.shared
+        let original = preferences.emptyWindowTitle
+        preferences.emptyWindowTitle = false
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer {
+            window.close()
+            preferences.emptyWindowTitle = original
+        }
+        controller.newTab()
+        let background = try #require(controller.selectedTab)
+        controller.newTab()
+        let foreground = try #require(controller.selectedTab)
+        let host = try #require(foreground.displayedView.superview)
+        let tabBar = try #require(host.subviews.compactMap { $0 as? TabBar }.first)
+        let buttons = tabBar.subviews.compactMap { $0 as? NSButton }
+        try #require(buttons.count == 2)
+
+        foreground.activePane.updateTitle("active")
+        #expect(window.title == "active")
+        #expect(buttons[1].title == "active")
+        let minimum = NSSize(width: window.contentMinSize.width + 1, height: window.contentMinSize.height)
+        window.contentMinSize = minimum
+        buttons[1].setAccessibilityLabel("Existing label")
+
+        foreground.activePane.updateTitle("\u{1B}active")
+        #expect(buttons[1].accessibilityLabel() == "Existing label")
+        #expect(window.contentMinSize == minimum)
+
+        background.activePane.updateTitle("logs")
+        #expect(buttons[0].title == "logs")
+        #expect(buttons[1].accessibilityLabel() == "Existing label")
+        #expect(window.title == "active")
+        foreground.activePane.updateTitle("")
+        #expect(buttons[1].title.isEmpty)
+        #expect(buttons[1].accessibilityLabel() == "Tab 2")
+        #expect(window.title == "Therm2")
+        #expect(window.contentMinSize == minimum)
+
+        controller.closeTab(background)
+        #expect(tabBar.isHidden)
+        #expect(foreground.displayedView.frame.minY == 0)
+    }
+
     @Test func ansiTitlesCombineAcrossPanesAndSurviveFocusAndMaximization() async throws {
         let tab = tab()
         let first = tab.activePane

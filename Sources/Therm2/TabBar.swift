@@ -23,19 +23,26 @@ final class TabBar: NSView {
                 button.lineBreakMode = .byTruncatingTail
                 button.focusRingType = .none
                 button.setAccessibilityRole(.radioButton)
+                button.setAccessibilityLabel("Tab \(index + 1)")
                 addSubview(button)
                 return button
             }
         }
         selectedIndex = selected
         for (index, button) in buttons.enumerated() {
-            button.title = titles[index]
-            button.setAccessibilityLabel(titles[index].isEmpty ? "Tab \(index + 1)" : titles[index])
+            updateTitle(titles[index], at: index)
             button.contentTintColor = index == selected ? .white : .secondaryLabelColor
             button.setAccessibilityValue(index == selected ? 1 : 0)
         }
         needsLayout = true
         needsDisplay = true
+    }
+
+    func updateTitle(_ title: String, at index: Int) {
+        guard buttons.indices.contains(index), buttons[index].title != title else { return }
+        let button = buttons[index]
+        button.title = title
+        button.setAccessibilityLabel(title.isEmpty ? "Tab \(index + 1)" : title)
     }
 
     override func layout() {

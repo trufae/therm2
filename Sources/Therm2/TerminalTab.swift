@@ -34,7 +34,7 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
     func focus(_ pane: TerminalPane) {
         guard activePane !== pane else { return }
         activePane = pane
-        controller?.refreshChrome()
+        controller?.updateWindowTitle()
     }
 
     @discardableResult
