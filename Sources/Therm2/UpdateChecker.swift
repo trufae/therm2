@@ -11,8 +11,7 @@ enum UpdateChecker {
 
     static func checkOnStartup() {
         guard Preferences.shared.checkForUpdatesOnStartup,
-              let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
-              !current.isEmpty else { return }
+              let current = Therm2.version else { return }
         Task {
             guard let upstream = await availableVersion(currentVersion: current),
                   Preferences.shared.checkForUpdatesOnStartup,

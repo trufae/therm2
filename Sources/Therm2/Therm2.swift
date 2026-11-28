@@ -2,6 +2,12 @@ import AppKit
 
 @main
 enum Therm2 {
+    static var version: String? {
+        guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+              !version.isEmpty else { return nil }
+        return version
+    }
+
     @MainActor static func main() {
         let command: LaunchCommand?
         do {

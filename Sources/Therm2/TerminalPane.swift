@@ -184,7 +184,7 @@ final class TerminalPane: LocalProcessTerminalView {
         values["TERM"] = "xterm-256color"
         values["COLORTERM"] = "truecolor"
         values["TERM_PROGRAM"] = "Therm2"
-        values["TERM_PROGRAM_VERSION"] = "0.1.0"
+        values["TERM_PROGRAM_VERSION"] = Therm2.version
         values["SHELL"] = shell
         values["HOME"] = NSHomeDirectory()
         if values["PATH"] == nil { values["PATH"] = LaunchCommand.defaultPath }
