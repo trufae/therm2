@@ -103,6 +103,39 @@ struct ProcessTests {
         #expect(TerminalProcess(pid: pid) == nil)
     }
 
+    @Test(arguments: [false, true])
+    func inactiveSplitExitPreservesSearchFocusAndCaret(maximized: Bool) async throws {
+        let command = try #require(try LaunchCommand.parse(["-e", "/bin/sh", "-c", "read -r line"]))
+        let controller = TerminalWindowController()
+        let window = try #require(controller.window)
+        defer { window.close() }
+        controller.newTab(command: command)
+        let tab = try #require(controller.selectedTab)
+        let inactive = tab.activePane
+        let active = try #require(tab.split(vertical: true))
+        if maximized { tab.togglePaneMaximized() }
+
+        let searchField = NSSearchField(frame: NSRect(x: 0, y: 0, width: 100, height: 24))
+        searchField.stringValue = "needle"
+        active.addSubview(searchField)
+        try #require(window.makeFirstResponder(searchField))
+        let editor = try #require(searchField.currentEditor() as? NSTextView)
+        let caret = NSRange(location: 2, length: 0)
+        editor.setSelectedRange(caret)
+
+        inactive.send(txt: "done\n")
+        let deadline = ContinuousClock.now + .seconds(5)
+        while tab.panes.count == 2, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(tab.panes.count == 1)
+        #expect(tab.activePane === active)
+        let survivingEditor = try #require(searchField.currentEditor() as? NSTextView)
+        #expect(window.firstResponder === survivingEditor)
+        #expect(survivingEditor.selectedRange() == caret)
+    }
+
     @Test func acceptingCloseStopsCommandsAndBackgroundJobsThatIgnoreTermination() async throws {
         let command = try #require(try LaunchCommand.parse(["-e", "/bin/sh", "-c", """
             trap '' HUP TERM

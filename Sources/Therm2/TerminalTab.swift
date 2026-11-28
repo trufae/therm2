@@ -90,6 +90,7 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
 
     func close(_ pane: TerminalPane) {
         guard panes.contains(where: { $0 === pane }) else { return }
+        let savedFocus = pane === activePane ? nil : TerminalWindowController.SavedFocus(controller?.window?.firstResponder)
         let wasMaximized = isPaneMaximized
         setPaneMaximized(false)
         let paneView = pane.layoutView
@@ -100,7 +101,7 @@ final class TerminalTab: LocalProcessTerminalViewDelegate {
         pane.stop()
         removePane(pane)
         setPaneMaximized(wasMaximized)
-        controller?.layoutChanged(in: self)
+        controller?.layoutChanged(in: self, restoringFocus: savedFocus)
     }
 
     private func removePane(_ pane: TerminalPane) {

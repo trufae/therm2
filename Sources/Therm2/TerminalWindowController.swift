@@ -169,11 +169,44 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
         pane.start()
     }
 
-    func layoutChanged(in tab: TerminalTab) {
+    @MainActor struct SavedFocus {
+        private let view: NSView
+        private let selection: NSRange?
+
+        init?(_ responder: NSResponder?) {
+            guard let view = responder as? NSView else { return nil }
+            if let editor = view as? NSTextView, editor.isFieldEditor, let field = editor.delegate as? NSControl {
+                // AppKit can end field editing when the surviving pane is reparented.
+                self.view = field
+                selection = editor.selectedRange()
+            } else {
+                self.view = view
+                selection = nil
+            }
+        }
+
+        func restore(in window: NSWindow) -> Bool {
+            guard view.window === window else { return false }
+            let field = view as? NSControl
+            let currentEditor = field?.currentEditor()
+            let alreadyFocused = window.firstResponder === view
+                || (currentEditor != nil && window.firstResponder === currentEditor)
+            guard alreadyFocused || window.makeFirstResponder(view) else { return false }
+            if let selection, let editor = field?.currentEditor() as? NSTextView,
+               editor.selectedRange() != selection, NSMaxRange(selection) <= editor.string.utf16.count {
+                editor.setSelectedRange(selection)
+            }
+            return true
+        }
+    }
+
+    func layoutChanged(in tab: TerminalTab, restoringFocus focus: SavedFocus? = nil) {
         guard tab === selectedTab else { refreshChrome(); return }
         if tab.displayedView.superview !== content { content.addSubview(tab.displayedView) }
         layoutContent()
-        window?.makeFirstResponder(tab.activePane)
+        if let window, focus?.restore(in: window) != true {
+            window.makeFirstResponder(tab.activePane)
+        }
         refreshChrome()
     }
 
