@@ -38,6 +38,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         command != nil
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let panes = windows.values.flatMap { $0.tabs.flatMap(\.panes) }
+        return ProcessTerminationConfirmation.confirm("Quit Therm2", panes: panes) ? .terminateNow : .terminateCancel
+    }
+
     func applicationDidBecomeActive(_ notification: Notification) { updatePresentation() }
     func applicationDidResignActive(_ notification: Notification) { updatePresentation() }
 
@@ -93,7 +98,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             NSApp.keyWindow?.performClose(sender)
             return
         }
-        if let tab = current?.selectedTab { tab.close(tab.activePane) }
+        guard let tab = current?.selectedTab else { return }
+        let pane = tab.activePane
+        if ProcessTerminationConfirmation.confirm("Close Pane", panes: [pane]) { tab.close(pane) }
     }
 
     @objc private func showPreferences(_ sender: Any?) {
@@ -105,7 +112,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     @objc private func closeTab(_ sender: Any?) {
-        if let current, let tab = current.selectedTab { current.closeTab(tab) }
+        guard let current, let tab = current.selectedTab else { return }
+        if ProcessTerminationConfirmation.confirm("Close Tab", panes: tab.panes) { current.closeTab(tab) }
     }
 
     @objc private func splitVertical(_ sender: Any?) { current?.split(vertical: true) }

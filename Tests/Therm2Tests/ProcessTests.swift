@@ -38,6 +38,7 @@ struct ProcessTests {
         controller.newTab(command: command)
         let pane = try #require(controller.selectedTab?.activePane)
         try await waitFor("READY", in: pane)
+        #expect(pane.hasRunningPrograms)
         let output = String(decoding: pane.getBufferAsData(), as: UTF8.self)
         #expect(output.contains("PTY_OK"))
         for argument in ["two words", "", "$HOME; * | >", "-e"] {
@@ -70,6 +71,43 @@ struct ProcessTests {
         #expect(controller.tabs.count == 1)
         #expect(controller.selectedTab?.activePane === newPane)
         #expect(!pane.process.running)
+    }
+
+    @Test func idleShellIsIgnoredAndClosingStopsItsBackgroundJob() async throws {
+        let pane = TerminalPane(directory: NSHomeDirectory())
+        pane.start()
+        defer { pane.stop() }
+        pane.send(txt: "printf 'SHELL_%s\\n' IDLE\n")
+        try await waitFor("SHELL_IDLE", in: pane)
+        #expect(!pane.hasRunningPrograms)
+
+        pane.send(txt: "/bin/sleep 30 &\nprintf 'THERM2_%s=%s\\n' JOB $!\n")
+        try await waitFor("THERM2_JOB=", in: pane)
+        let output = String(decoding: pane.getBufferAsData(), as: UTF8.self)
+        let job = try #require(output.firstMatch(of: /THERM2_JOB=([0-9]+)/))
+        let pid = try #require(pid_t(job.1))
+        #expect(pane.hasRunningPrograms)
+
+        pane.stop()
+        let deadline = ContinuousClock.now + .seconds(5)
+        while TerminalProcess(pid: pid) != nil, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(TerminalProcess(pid: pid) == nil)
+    }
+
+    @Test func aProgramThatReplacesTheLoginShellRequiresConfirmation() async throws {
+        let pane = TerminalPane(directory: NSHomeDirectory())
+        pane.start()
+        defer { pane.stop() }
+        let shellPID = pane.process.shellPid
+        pane.send(txt: "exec /bin/sleep 30\n")
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !pane.hasRunningPrograms, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(pane.hasRunningPrograms)
+        #expect(pane.process.shellPid == shellPID)
     }
 
     @Test func splitInheritsActualShellDirectoryAndNotifiesItsProcessOfResize() async throws {

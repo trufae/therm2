@@ -12,6 +12,7 @@ final class TerminalPane: LocalProcessTerminalView {
     private(set) var directory: String
     private(set) var started = false
     private let command: LaunchCommand?
+    private var loginShellPath: String?
     private var pinchFontSize: CGFloat?
     private var stopped = false
     var layoutView: NSView { superview as? TerminalPaneFrame ?? self }
@@ -24,6 +25,19 @@ final class TerminalPane: LocalProcessTerminalView {
     var currentWorkingDirectory: String {
         if process.running, let path = WorkingDirectory.path(of: process.shellPid) { return path }
         return WorkingDirectory.valid(directory) ? directory : NSHomeDirectory()
+    }
+
+    private var sessionProcess: TerminalProcess? {
+        guard let child = TerminalProcess(pid: process.shellPid), child.parentPID == getpid() else { return nil }
+        return child
+    }
+
+    var hasRunningPrograms: Bool {
+        guard let child = sessionProcess else { return false }
+        if command != nil || !child.children.isEmpty { return true }
+        // A shell can exec a program that takes over the original PTY PID.
+        guard child.hasExecuted, let path = child.executablePath, let loginShellPath else { return false }
+        return URL(fileURLWithPath: path).resolvingSymlinksInPath().path != loginShellPath
     }
 
     init(directory: String, command: LaunchCommand? = nil) {
@@ -138,17 +152,23 @@ final class TerminalPane: LocalProcessTerminalView {
             do { try setUseMetal(true) }
             catch { NSLog("Metal unavailable, using Core Graphics: %@", String(describing: error)) }
         }
-        startProcess(executable: command?.executable ?? Self.shell,
+        let executable = command?.executable ?? Self.shell
+        if command == nil { loginShellPath = URL(fileURLWithPath: executable).resolvingSymlinksInPath().path }
+        startProcess(executable: executable,
                      args: command?.arguments ?? [], environment: Self.environment,
-                     execName: command?.name ?? "-" + URL(fileURLWithPath: Self.shell).lastPathComponent,
+                     execName: command?.name ?? "-" + URL(fileURLWithPath: executable).lastPathComponent,
                      currentDirectory: directory)
     }
 
     func stop() {
+        guard !stopped else { return }
         stopped = true
         processDelegate = nil
         tab = nil
-        if started { terminate() }
+        if started {
+            sessionProcess?.terminateDescendants()
+            terminate()
+        }
     }
 
     private static var shell: String {

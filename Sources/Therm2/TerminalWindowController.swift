@@ -370,6 +370,10 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) {
         (NSApp.delegate as? AppDelegate)?.updatePresentation()
     }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        ProcessTerminationConfirmation.confirm("Close Window", panes: tabs.flatMap(\.panes))
+    }
+
     func windowWillClose(_ notification: Notification) {
         contentLayoutObservation = nil
         NotificationCenter.default.removeObserver(self)
